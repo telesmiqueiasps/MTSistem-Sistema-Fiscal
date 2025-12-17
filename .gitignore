@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Builds
+dist/
+build/
+installer/
+
+# Executáveis
+*.exe
+
+# Bibliotecas grandes
+*.dll
+
+# Ambientes virtuais
+venv/
+.env
