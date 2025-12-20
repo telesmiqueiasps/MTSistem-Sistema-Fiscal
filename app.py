@@ -1625,10 +1625,11 @@ class ExtratorFiscalPDFApp:
 # =====================================================
 
 class SistemaFiscal:
-    def __init__(self, root, usuario_id):
+    def __init__(self, root, usuario_id, usuario_nome):
         self.root = root
         self.usuario_id = usuario_id
         self.dao = UsuarioDAO()
+        self.usuario_nome = usuario_nome
         root.title("MT Sistem - Sistema Fiscal")
         root.geometry("800x800")
         root.resizable(False, False)
@@ -1667,32 +1668,56 @@ class SistemaFiscal:
         main_frame = ttk.Frame(self.root, style='Main.TFrame', padding=30)
         main_frame.pack(fill="both", expand=True)
         
-        # Logo/Título
+        # =========================
+        # HEADER
+        # =========================
         header_frame = ttk.Frame(main_frame, style='Main.TFrame')
         header_frame.pack(fill="x", pady=(0, 30))
 
+        header_top = ttk.Frame(header_frame, style='Main.TFrame')
+        header_top.pack(fill="x")
+
+        # Logo
         caminho_logo = resource_path("Icones/logo.png")
-
-
         img = Image.open(caminho_logo)
-        img = img.resize((80, 80), Image.LANCZOS)
-
+        img = img.resize((70, 70), Image.LANCZOS)
         self.logo_img = ImageTk.PhotoImage(img)
 
         ttk.Label(
-            header_frame,
+            header_top,
             image=self.logo_img,
             background=CORES['bg_main']
-        ).pack()
+        ).pack(side="left")
 
-        
+        # Usuário logado + botão sair
+        user_frame = ttk.Frame(header_top, style='Main.TFrame')
+        user_frame.pack(side="right")
+
+        ttk.Label(
+            user_frame,
+            text=f"👤 {self.usuario_nome}",
+            font=('Segoe UI', 9),
+            background=CORES['bg_main'],
+            foreground=CORES['text_light']
+        ).pack(anchor="e")
+
+        ttk.Button(
+            user_frame,
+            text="🚪 Sair",
+            style="Secondary.TButton",
+            command=self.sair
+        ).pack(anchor="e", pady=(5, 0))
+
+        # =========================
+        # TÍTULO
+        # =========================
         ttk.Label(
             header_frame,
             text="Sistema Fiscal",
             font=('Segoe UI', 22, 'bold'),
             background=CORES['bg_main'],
             foreground=CORES['text_dark']
-        ).pack(pady=(10, 5))
+        ).pack(pady=(15, 5))
         
         ttk.Label(
             header_frame,
@@ -1701,6 +1726,7 @@ class SistemaFiscal:
             background=CORES['bg_main'],
             foreground=CORES['text_light']
         ).pack()
+
         
         # Card de módulos
         card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
