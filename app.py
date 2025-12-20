@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 import os
 import pandas as pd
 from PyPDF2 import PdfMerger
@@ -8,8 +8,429 @@ from openpyxl.styles import PatternFill
 from PIL import Image, ImageTk
 import re
 import sys
+import pdfplumber
+import sqlite3
+import hashlib
+
+DB_PATH = "db/usuarios.db"
+
+MODULOS = {
+    "abrir_extrator": "Extrator TXT → Excel",
+    "abrir_comparador": "Comparador SEFAZ x Sistema",
+    "abrir_triagem": "Triagem SPED → PDFs",
+    "abrir_extrator_pdf": "Extrator PDF → Excel"
+}
 
 
+class UsuarioDAO:
+    def __init__(self):
+        self.conn = sqlite3.connect(DB_PATH)
+        self.criar_tabelas()
+        self.criar_admin_inicial()
+
+    # ==========================
+    # TABELAS
+    # ==========================
+    def criar_tabelas(self):
+        cur = self.conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL UNIQUE,
+                senha TEXT NOT NULL,
+                admin INTEGER DEFAULT 0
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS permissoes (
+                usuario_id INTEGER,
+                modulo TEXT,
+                permitido INTEGER DEFAULT 0,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            )
+        """)
+
+        self.conn.commit()
+
+    # ==========================
+    # HASH
+    # ==========================
+    def hash_senha(self, senha):
+        return hashlib.sha256(senha.encode("utf-8")).hexdigest()
+
+    # ==========================
+    # ADMIN PADRÃO
+    # ==========================
+    def criar_admin_inicial(self):
+        cur = self.conn.cursor()
+
+        # Verifica se já existe algum admin
+        cur.execute("SELECT COUNT(*) FROM usuarios WHERE admin = 1")
+        existe_admin = cur.fetchone()[0]
+
+        if existe_admin == 0:
+            senha_hash = self.hash_senha("123456")
+
+            cur.execute("""
+                INSERT INTO usuarios (nome, senha, admin)
+                VALUES (?, ?, 1)
+            """, ("admin", senha_hash))
+
+            admin_id = cur.lastrowid
+
+            # Concede todas as permissões
+            modulos = [
+                "abrir_extrator",
+                "abrir_comparador",
+                "abrir_triagem",
+                "abrir_extrator_pdf",
+                "usuarios_admin"
+            ]
+
+            for modulo in modulos:
+                cur.execute("""
+                    INSERT INTO permissoes (usuario_id, modulo, permitido)
+                    VALUES (?, ?, 1)
+                """, (admin_id, modulo))
+
+            self.conn.commit()
+
+    # ==========================
+    # AUTENTICAÇÃO
+    # ==========================
+    def autenticar(self, nome, senha):
+        senha_hash = self.hash_senha(senha)
+
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT id, admin FROM usuarios WHERE nome=? AND senha=?",
+            (nome, senha_hash)
+        )
+        return cur.fetchone()
+
+    def listar_usuarios(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, nome, admin FROM usuarios")
+        return cur.fetchall()
+
+    def permissoes_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT modulo FROM permissoes WHERE usuario_id=? AND permitido=1",
+            (usuario_id,)
+        )
+        return [r[0] for r in cur.fetchall()]
+    
+    def is_admin(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT admin FROM usuarios WHERE id=?",
+            (usuario_id,)
+        )
+        row = cur.fetchone()
+        return row and row[0] == 1
+    
+    def criar_usuario(self, nome, senha, admin):
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO usuarios (nome, senha, admin) VALUES (?, ?, ?)",
+            (nome, senha, admin)
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+
+    def salvar_permissoes(self, usuario_id, permissoes):
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM permissoes WHERE usuario_id=?", (usuario_id,))
+        
+        for modulo, permitido in permissoes.items():
+            cur.execute(
+                "INSERT INTO permissoes (usuario_id, modulo, permitido) VALUES (?, ?, ?)",
+                (usuario_id, modulo, int(permitido))
+            )
+        self.conn.commit()
+
+    def buscar_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT id, nome, admin FROM usuarios WHERE id=?",
+            (usuario_id,)
+        )
+        return cur.fetchone()
+
+
+    def atualizar_usuario(self, usuario_id, nome, admin):
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE usuarios SET nome=?, admin=? WHERE id=?",
+            (nome, admin, usuario_id)
+        )
+        self.conn.commit()
+
+
+    def atualizar_senha(self, usuario_id, senha):
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE usuarios SET senha=? WHERE id=?",
+            (senha, usuario_id)
+        )
+        self.conn.commit()
+
+
+    def excluir_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM permissoes WHERE usuario_id=?", (usuario_id,))
+        cur.execute("DELETE FROM usuarios WHERE id=?", (usuario_id,))
+        self.conn.commit()
+    
+    
+
+# =====================================================
+# Tela de Login
+# =====================================================
+
+class TelaLogin:
+    def __init__(self, root):
+        self.root = root
+        self.dao = UsuarioDAO()
+
+        self.root.title("Login - Sistema Fiscal")
+        self.root.geometry("600x500")
+        self.root.configure(bg=CORES['bg_main'])
+
+        self.criar_interface()
+
+    def criar_interface(self):
+        frame = ttk.Frame(self.root, style="Main.TFrame", padding=30)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame,
+            text="Selecione o usuário",
+            font=('Segoe UI', 16, 'bold')
+        ).pack(pady=20)
+
+        for user_id, nome, admin in self.dao.listar_usuarios():
+            btn = ttk.Button(
+                frame,
+                text=f"{nome} {'(Admin)' if admin else ''}",
+                command=lambda i=user_id, n=nome: self.pedir_senha(i, n)
+            )
+            btn.pack(fill="x", pady=5)
+
+    def pedir_senha(self, usuario_id, nome):
+        senha = simpledialog.askstring(
+            "Senha",
+            f"Digite a senha do usuário {nome}:",
+            show="*"
+        )
+        if not senha:
+            return
+
+        auth = self.dao.autenticar(nome, senha)
+        if auth:
+            self.root.destroy()
+            root = tk.Tk()
+            SistemaFiscal(root, usuario_id=usuario_id)
+            root.mainloop()
+        else:
+            messagebox.showerror("Erro", "Senha incorreta")
+
+# =====================================================
+# Tela de Cadastro de Usuários e Permissões
+# =====================================================
+class TelaUsuariosAdmin:
+    def __init__(self, parent):
+        self.dao = UsuarioDAO()
+        self.usuario_atual_id = None
+        self.vars_permissoes = {}
+
+        self.janela = tk.Toplevel(parent)
+        self.janela.title("Usuários e Permissões")
+        self.janela.geometry("900x600")
+        self.janela.configure(bg=CORES['bg_main'])
+
+        self.criar_interface()
+        self.carregar_usuarios()
+
+    def criar_interface(self):
+        container = ttk.Frame(self.janela, padding=20)
+        container.pack(fill="both", expand=True)
+
+        # ======================
+        # LADO ESQUERDO – LISTA
+        # ======================
+        left = ttk.Frame(container)
+        left.pack(side="left", fill="y", padx=(0, 20))
+
+        ttk.Label(
+            left,
+            text="Usuários",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(anchor="w")
+
+        self.lista = tk.Listbox(left, width=30, height=25)
+        self.lista.pack(pady=10)
+        self.lista.bind("<<ListboxSelect>>", self.selecionar_usuario)
+
+        ttk.Button(
+            left,
+            text="Novo Usuário",
+            command=self.novo_usuario
+        ).pack(fill="x", pady=(5, 0))
+
+        ttk.Button(
+            left,
+            text="Excluir Usuário",
+            command=self.excluir_usuario
+        ).pack(fill="x", pady=5)
+
+        # ======================
+        # LADO DIREITO – FORM
+        # ======================
+        right = ttk.Frame(container)
+        right.pack(side="left", fill="both", expand=True)
+
+        ttk.Label(
+            right,
+            text="Dados do Usuário",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(anchor="w")
+
+        form = ttk.Frame(right)
+        form.pack(fill="x", pady=10)
+
+        ttk.Label(form, text="Nome").grid(row=0, column=0, sticky="w")
+        self.entry_nome = ttk.Entry(form)
+        self.entry_nome.grid(row=0, column=1, sticky="ew", padx=10)
+
+        ttk.Label(form, text="Nova senha").grid(row=1, column=0, sticky="w")
+        self.entry_senha = ttk.Entry(form, show="*")
+        self.entry_senha.grid(row=1, column=1, sticky="ew", padx=10)
+
+        self.var_admin = tk.IntVar()
+        ttk.Checkbutton(
+            form,
+            text="Administrador",
+            variable=self.var_admin
+        ).grid(row=2, column=1, sticky="w", pady=5)
+
+        form.columnconfigure(1, weight=1)
+
+        # ======================
+        # PERMISSÕES
+        # ======================
+        ttk.Label(
+            right,
+            text="Permissões",
+            font=('Segoe UI', 12, 'bold')
+        ).pack(anchor="w", pady=(15, 5))
+
+        perms = ttk.Frame(right)
+        perms.pack(anchor="w")
+
+        for modulo, label in MODULOS.items():
+            var = tk.IntVar()
+            self.vars_permissoes[modulo] = var
+            ttk.Checkbutton(
+                perms,
+                text=label,
+                variable=var
+            ).pack(anchor="w")
+
+        ttk.Button(
+            right,
+            text="Salvar alterações",
+            command=self.salvar
+        ).pack(pady=20)
+
+    # ======================
+    # MÉTODOS
+    # ======================
+    def carregar_usuarios(self):
+        self.lista.delete(0, tk.END)
+        self.usuarios = self.dao.listar_usuarios()
+        for uid, nome, admin in self.usuarios:
+            sufixo = " (Admin)" if admin else ""
+            self.lista.insert(tk.END, f"{nome}{sufixo}")
+
+    def selecionar_usuario(self, event):
+        idx = self.lista.curselection()
+        if not idx:
+            return
+
+        self.usuario_atual_id = self.usuarios[idx[0]][0]
+        dados = self.dao.buscar_usuario(self.usuario_atual_id)
+
+        self.entry_nome.delete(0, tk.END)
+        self.entry_nome.insert(0, dados[1])
+        self.var_admin.set(dados[2])
+
+        self.entry_senha.delete(0, tk.END)
+
+        permissoes = self.dao.permissoes_usuario(self.usuario_atual_id)
+        for modulo, var in self.vars_permissoes.items():
+            var.set(1 if modulo in permissoes else 0)
+
+    def novo_usuario(self):
+        self.usuario_atual_id = None
+        self.entry_nome.delete(0, tk.END)
+        self.entry_senha.delete(0, tk.END)
+        self.var_admin.set(0)
+        for var in self.vars_permissoes.values():
+            var.set(0)
+
+    def salvar(self):
+        nome = self.entry_nome.get().strip()
+        senha = self.entry_senha.get().strip()
+        admin = self.var_admin.get()
+
+        if not nome:
+            messagebox.showerror("Erro", "Nome é obrigatório")
+            return
+
+        if self.usuario_atual_id:
+            self.dao.atualizar_usuario(self.usuario_atual_id, nome, admin)
+
+            if senha:
+                self.dao.atualizar_senha(self.usuario_atual_id, senha)
+
+            usuario_id = self.usuario_atual_id
+        else:
+            if not senha:
+                messagebox.showerror("Erro", "Senha obrigatória para novo usuário")
+                return
+
+            usuario_id = self.dao.criar_usuario(nome, senha, admin)
+
+        permissoes = {
+            modulo: var.get()
+            for modulo, var in self.vars_permissoes.items()
+        }
+        self.dao.salvar_permissoes(usuario_id, permissoes)
+
+        self.carregar_usuarios()
+        messagebox.showinfo("Sucesso", "Usuário salvo com sucesso")
+
+    def excluir_usuario(self):
+        if not self.usuario_atual_id:
+            return
+
+        if messagebox.askyesno(
+            "Confirmar",
+            "Deseja realmente excluir este usuário?"
+        ):
+            self.dao.excluir_usuario(self.usuario_atual_id)
+            self.novo_usuario()
+            self.carregar_usuarios()
+
+
+# =====================================================
+# Funções auxiliares
+# =====================================================
 
 def resource_path(rel_path):
     if hasattr(sys, '_MEIPASS'):
@@ -118,7 +539,7 @@ class ExtratorFiscalApp:
         self.janela.deiconify()
         self.janela.lift()
         self.janela.focus_force()
-        self.janela.title("Extração TXT → Excel")
+        self.janela.title("MTSistem - Extração TXT → Excel")
         self.janela.geometry("800x700")
         self.janela.resizable(False, False)
         self.janela.configure(bg=CORES['bg_main'])
@@ -160,12 +581,21 @@ class ExtratorFiscalApp:
         header_line = ttk.Frame(header_frame, style='Main.TFrame')
         header_line.pack(fill="x")
 
+        # ÍCONE DO HEADER
+        caminho_icone = resource_path("Icones/txt.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((32, 32), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+
+
         ttk.Label(
             header_line,
-            text="📤 Extração TXT → Excel",
+            text="Extração TXT → Excel",
+            image=self.icon_header,
+            compound="left",  # ícone à esquerda do texto
             font=('Segoe UI', 16, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
+            foreground=CORES['text_dark'],
+            style="Main.TLabel"
         ).pack(side="left")
 
         ttk.Button(
@@ -394,12 +824,22 @@ class TriagemSPED:
         header_line = ttk.Frame(header_frame, style='Main.TFrame')
         header_line.pack(fill="x")
 
+    
+        # ÍCONE DO HEADER
+        caminho_icone = resource_path("Icones/sped.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((32, 32), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+
+
         ttk.Label(
             header_line,
-            text="📄 Triagem SPED → PDFs",
+            text="  Triagem SPED → PDFs",
+            image=self.icon_header,
+            compound="left",  # ícone à esquerda do texto
             font=('Segoe UI', 16, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
+            foreground=CORES['text_dark'],
+            style="Main.TLabel"
         ).pack(side="left")
 
         ttk.Button(
@@ -657,12 +1097,21 @@ class ComparadorNotas:
         header_line = ttk.Frame(header_frame, style='Main.TFrame')
         header_line.pack(fill="x")
 
+        # ÍCONE DO HEADER
+        caminho_icone = resource_path("Icones/comparador.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((32, 32), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+
+
         ttk.Label(
             header_line,
-            text="⚖️ Comparador de Notas",
+            text="Comparador de Notas Fiscais",
+            image=self.icon_header,
+            compound="left",  # ícone à esquerda do texto
             font=('Segoe UI', 16, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
+            foreground=CORES['text_dark'],
+            style="Main.TLabel"
         ).pack(side="left")
 
         ttk.Button(
@@ -951,16 +1400,237 @@ class ComparadorNotas:
                 f"Ocorreu um erro ao comparar os arquivos:\n\n{str(e)}"
             )
 
+# =====================================================
+# Extração Informações PDF → Excel
+# =====================================================
+class ExtratorFiscalPDFApp:
+    def __init__(self, parent_window):
+        self.parent_window = parent_window
+        self.janela = tk.Toplevel()
+        self.janela.deiconify()
+        self.janela.lift()
+        self.janela.focus_force()
+        self.janela.title("MTSistem - Extração PDF → Excel")
+        self.janela.geometry("800x700")
+        self.janela.resizable(False, False)
+        self.janela.configure(bg=CORES['bg_main'])
+
+        caminho_icone = resource_path("Icones/logo.ico")
+        self.janela.iconbitmap(caminho_icone)
+
+        self.parent_window.withdraw()
+        self.centralizar_janela()
+        self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
+
+        self.arquivo_pdf = None
+
+        self.criar_interface()
+
+    def fechar(self):
+        self.parent_window.deiconify()
+        self.janela.destroy()
+
+    def centralizar_janela(self):
+        self.janela.update_idletasks()
+        width = self.janela.winfo_width()
+        height = self.janela.winfo_height()
+        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
+        self.janela.geometry(f'{width}x{height}+{x}+{y}')
+
+    def criar_interface(self):
+        main_frame = ttk.Frame(self.janela, style='Main.TFrame', padding=20)
+        main_frame.pack(fill="both", expand=True)
+
+        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
+        header_frame.pack(fill="x", pady=(0, 20))
+
+        header_line = ttk.Frame(header_frame, style='Main.TFrame')
+        header_line.pack(fill="x")
+
+        # ÍCONE DO HEADER
+        caminho_icone = resource_path("Icones/pdf.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((32, 32), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+
+
+        ttk.Label(
+            header_line,
+            text="  Extração PDF → Excel",
+            image=self.icon_header,
+            compound="left",  # ícone à esquerda do texto
+            font=('Segoe UI', 16, 'bold'),
+            foreground=CORES['text_dark'],
+            style="Main.TLabel"
+        ).pack(side="left")
+
+        ttk.Button(
+            header_line,
+            text="← Voltar",
+            style="Voltar.TButton",
+            command=self.fechar
+        ).pack(side="right")
+
+        ttk.Label(
+            header_frame,
+            text="Extraia informações fiscais de relatórios em PDF",
+            font=('Segoe UI', 9),
+            background=CORES['bg_main'],
+            foreground=CORES['text_light']
+        ).pack(anchor="w", pady=(5, 0))
+
+        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
+        card.pack(fill="both", expand=True)
+
+        self.lbl_pdf = self.criar_campo(
+            card,
+            "Arquivo PDF (.pdf)",
+            "Selecione o relatório fiscal em PDF",
+            self.selecionar_pdf
+        )
+
+        btn_frame = ttk.Frame(card, style='Card.TFrame')
+        btn_frame.pack(fill="x", pady=(20, 0))
+
+        ttk.Button(
+            btn_frame,
+            text="▶ Executar Extração e Exportar Excel",
+            style='Primary.TButton',
+            command=self.processar
+        ).pack(fill="x")
+
+    def criar_campo(self, parent, titulo, subtitulo, comando):
+        campo_frame = ttk.Frame(parent, style='Card.TFrame')
+        campo_frame.pack(fill="x", pady=(0, 20))
+
+        ttk.Label(campo_frame, text=titulo, style='Title.TLabel').pack(anchor="w")
+        ttk.Label(campo_frame, text=subtitulo, style='Subtitle.TLabel').pack(anchor="w", pady=(2, 8))
+
+        input_frame = ttk.Frame(campo_frame, style='Card.TFrame')
+        input_frame.pack(fill="x")
+
+        entry = ttk.Entry(input_frame, font=('Segoe UI', 9))
+        entry.pack(side="left", fill="x", expand=True, ipady=5)
+
+        ttk.Button(
+            input_frame,
+            text="📁 Selecionar",
+            style='Secondary.TButton',
+            command=comando
+        ).pack(side="right", padx=(10, 0))
+
+        return entry
+
+    def selecionar_pdf(self):
+        arquivo = filedialog.askopenfilename(filetypes=[("Arquivos PDF", "*.pdf")])
+        if arquivo:
+            self.lbl_pdf.delete(0, tk.END)
+            self.lbl_pdf.insert(0, arquivo)
+
+    # ==============================
+    # PROCESSAMENTO FISCAL
+    # ==============================
+    def processar(self):
+        caminho_pdf = self.lbl_pdf.get()
+        if not caminho_pdf:
+            messagebox.showwarning("Atenção", "Selecione um arquivo PDF.")
+            return
+
+        salvar_em = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")]
+        )
+        if not salvar_em:
+            return
+
+        dados = []
+
+        nota_atual = {
+            "Fornecedor": None,
+            "Data de Emissao": None,
+            "Pedido": None,
+            "Quantidade": 0.0
+        }
+
+        try:
+            with pdfplumber.open(caminho_pdf) as pdf:
+                for page in pdf.pages:
+                    texto = page.extract_text()
+                    if not texto:
+                        continue
+
+                    for linha in texto.split("\n"):
+                        linha = linha.strip()
+
+                        # Fornecedor
+                        if linha.startswith("Fornecedor:"):
+                            nota_atual["Fornecedor"] = linha.replace("Fornecedor:", "").strip()
+
+                        # Data
+                        if "Emissão:" in linha:
+                            data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
+                            if data:
+                                nota_atual["Data de Emissao"] = data.group()
+
+                        # Linha de produto → quantidade
+                        if any(u in linha for u in [" Kg ", " SC ", " UN ", " TON "]):
+                            qtd_match = re.search(r"\b\d{1,3}(?:\.\d{3})*,\d{2}\b", linha)
+                            if qtd_match:
+                                qtd = float(qtd_match.group().replace(".", "").replace(",", "."))
+                                nota_atual["Quantidade"] += qtd
+
+                        # Pedido
+                        pedido_match = re.search(r"\b(\d{6})/\d{2}\b", linha)
+                        if pedido_match and nota_atual["Pedido"] is None:
+                            nota_atual["Pedido"] = pedido_match.group(1)
+
+                        # Total da nota
+                        if linha.startswith("TOTAL DA NOTA:"):
+                            numero_match = re.search(r"/\s*(\d+)", linha)
+                            valor = float(linha.split()[-1].replace(".", "").replace(",", "."))
+
+                            dados.append({
+                                "Numero": numero_match.group(1) if numero_match else None,
+                                "Pedido": nota_atual["Pedido"],
+                                "Data de Emissao": nota_atual["Data de Emissao"],
+                                "Fornecedor": nota_atual["Fornecedor"],
+                                "Quantidade": nota_atual["Quantidade"],
+                                "Valor": valor
+                            })
+
+                            nota_atual = {
+                                "Fornecedor": None,
+                                "Data de Emissao": None,
+                                "Pedido": None,
+                                "Quantidade": 0.0
+                            }
+
+            if not dados:
+                messagebox.showwarning("Aviso", "Nenhuma nota encontrada.")
+                return
+
+            df = pd.DataFrame(dados)
+            df["Data de Emissao"] = pd.to_datetime(df["Data de Emissao"], dayfirst=True, errors="coerce")
+            df.to_excel(salvar_em, index=False)
+
+            messagebox.showinfo("Sucesso", f"Extração concluída!\nNotas extraídas: {len(df)}")
+
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
 
 # =====================================================
 # TELA INICIAL
 # =====================================================
 
 class SistemaFiscal:
-    def __init__(self, root):
+    def __init__(self, root, usuario_id):
         self.root = root
+        self.usuario_id = usuario_id
+        self.dao = UsuarioDAO()
         root.title("MT Sistem - Sistema Fiscal")
-        root.geometry("800x700")
+        root.geometry("800x800")
         root.resizable(False, False)
         root.configure(bg=CORES['bg_main'])
 
@@ -988,6 +1658,9 @@ class SistemaFiscal:
 
     def abrir_comparador(self):
         ComparadorNotas(self.root)
+
+    def abrir_extrator_pdf(self):
+        ExtratorFiscalPDFApp(self.root)
 
     def criar_interface(self):
         # Frame principal
@@ -1040,30 +1713,69 @@ class SistemaFiscal:
             background=CORES['bg_card'],
             foreground=CORES['text_dark']
         ).pack(anchor="w", pady=(0, 15))
+
+        # Verificar permissões do usuário
         
-        # Módulo 1
-        self.criar_card_modulo(
-            card,
-            "📤 Extrator TXT → Excel",
-            "Extraia informações fiscais de arquivos TXT para planilhas Excel",
-            self.abrir_extrator
-        )
+        dao = UsuarioDAO()
 
-        # Módulo 2
-        self.criar_card_modulo(
-            card,
-            "⚖️ Comparador SEFAZ x Sistema",
-            "Compare e identifique divergências entre as notas da SEFAZ e do Sistema",
-            self.abrir_comparador
-        )
+        is_admin = dao.is_admin(self.usuario_id)
+        permissoes = dao.permissoes_usuario(self.usuario_id)
 
-        # Módulo 3
-        self.criar_card_modulo(
-            card,
-            "📄 Triagem SPED → PDFs",
-            "Extraia e mescle automaticamente PDFs de NF-e e CT-e",
-            self.abrir_triagem
-        )
+        if is_admin:
+            ttk.Button(
+                main_frame,
+                text="Usuários e Permissões",
+                command=lambda: TelaUsuariosAdmin(self.root)
+            ).pack(pady=10)
+
+        
+        # =========================
+        # MÓDULO 1
+        # =========================
+        if is_admin or "abrir_extrator" in permissoes:
+            self.criar_card_modulo(
+                card,
+                "1. Extrator TXT → Excel",
+                "Extraia informações fiscais de arquivos TXT para planilhas Excel",
+                self.abrir_extrator,
+                icone="txt.png"
+            )
+
+        # =========================
+        # MÓDULO 2
+        # =========================
+        if is_admin or "abrir_comparador" in permissoes:
+            self.criar_card_modulo(
+                card,
+                "2. Comparador SEFAZ x Sistema",
+                "Compare e identifique divergências entre as notas da SEFAZ e do Sistema",
+                self.abrir_comparador,
+                icone="comparador.png"
+            )
+
+        # =========================
+        # MÓDULO 3
+        # =========================
+        if is_admin or "abrir_triagem" in permissoes:
+            self.criar_card_modulo(
+                card,
+                "3. Triagem SPED → PDFs",
+                "Extraia e mescle automaticamente PDFs de NF-e e CT-e",
+                self.abrir_triagem,
+                icone="sped.png"
+            )
+
+        # =========================
+        # MÓDULO 4
+        # =========================
+        if is_admin or "abrir_extrator_pdf" in permissoes:
+            self.criar_card_modulo(
+                card,
+                "4. Extrator PDF → Excel",
+                "Extraia informações fiscais de arquivos PDF para planilhas Excel",
+                self.abrir_extrator_pdf,
+                icone="pdf.png"
+            )
         
 
         # Rodapé
@@ -1078,7 +1790,7 @@ class SistemaFiscal:
             foreground=CORES['text_light']
         ).pack()
 
-    def criar_card_modulo(self, parent, titulo, descricao, comando):
+    def criar_card_modulo(self, parent, titulo, descricao, comando, icone=None):
         card = tk.Frame(
             parent,
             bg='white',
@@ -1090,9 +1802,27 @@ class SistemaFiscal:
         )
         card.pack(fill="x", pady=(0, 12))
 
-        # Conteúdo
+        topo = tk.Frame(card, bg='white')
+        topo.pack(fill="x")
+
+        # ==========================
+        # ÍCONE DO MÓDULO
+        # ==========================
+        if icone:
+            caminho_icone = resource_path(f"Icones/{icone}")
+            img = Image.open(caminho_icone)
+            img = img.resize((42, 42), Image.LANCZOS)
+            icone_img = ImageTk.PhotoImage(img)
+
+            lbl_icon = tk.Label(topo, image=icone_img, bg='white')
+            lbl_icon.image = icone_img  # ← MUITO IMPORTANTE
+            lbl_icon.pack(side="left", padx=(0, 15))
+
+        texto_frame = tk.Frame(topo, bg='white')
+        texto_frame.pack(side="left", fill="x", expand=True)
+
         titulo_lbl = tk.Label(
-            card,
+            texto_frame,
             text=titulo,
             font=('Segoe UI', 11, 'bold'),
             bg='white',
@@ -1102,45 +1832,70 @@ class SistemaFiscal:
         titulo_lbl.pack(fill="x")
 
         desc_lbl = tk.Label(
-            card,
+            texto_frame,
             text=descricao,
             font=('Segoe UI', 9),
             bg='white',
             fg=CORES['text_light'],
-            anchor='w'
+            anchor='w',
+            wraplength=520
         )
         desc_lbl.pack(fill="x", pady=(5, 0))
 
-        # Funções hover
+        # ==========================
+        # HOVER / CLICK
+        # ==========================
         def on_enter(e):
             card.config(
                 bg=CORES['bg_card_hover'],
                 highlightbackground=CORES['primary'],
                 highlightthickness=2
             )
+            topo.config(bg=CORES['bg_card_hover'])
+            texto_frame.config(bg=CORES['bg_card_hover'])
             titulo_lbl.config(bg=CORES['bg_card_hover'])
             desc_lbl.config(bg=CORES['bg_card_hover'])
+            if icone:
+                lbl_icon.config(bg=CORES['bg_card_hover'])
 
         def on_leave(e):
-            card.config(
-                bg='white',
-                highlightthickness=0
-            )
+            card.config(bg='white', highlightthickness=0)
+            topo.config(bg='white')
+            texto_frame.config(bg='white')
             titulo_lbl.config(bg='white')
             desc_lbl.config(bg='white')
+            if icone:
+                lbl_icon.config(bg='white')
 
         def on_click(e):
             comando()
 
-        # Bind em TUDO
-        for widget in (card, titulo_lbl, desc_lbl):
+        for widget in (card, topo, titulo_lbl, desc_lbl):
             widget.bind("<Enter>", on_enter)
             widget.bind("<Leave>", on_leave)
             widget.bind("<Button-1>", on_click)
 
+        if icone:
+            lbl_icon.bind("<Enter>", on_enter)
+            lbl_icon.bind("<Leave>", on_leave)
+            lbl_icon.bind("<Button-1>", on_click)
+
+    def sair(self):
+        resposta = messagebox.askyesno(
+            "Sair do sistema",
+            "Deseja sair e voltar para a tela de login?"
+        )
+        if not resposta:
+            return
+
+        self.root.destroy()
+
+        root = tk.Tk()
+        TelaLogin(root)
+        root.mainloop()
 
 
 if __name__ == "__main__":
     root = tk.Tk()
-    SistemaFiscal(root)
+    TelaLogin(root)
     root.mainloop()
