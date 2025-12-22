@@ -12,7 +12,10 @@ import pdfplumber
 import sqlite3
 import hashlib
 
-DB_PATH = "db/usuarios.db"
+
+DB_DIR = r"T:\MTSistem\db"
+DB_PATH = os.path.join(DB_DIR, "sistemafiscal.db")
+
 
 MODULOS = {
     "abrir_extrator": "Extrator TXT → Excel",
@@ -21,10 +24,17 @@ MODULOS = {
     "abrir_extrator_pdf": "Extrator PDF → Excel"
 }
 
+def garantir_banco():
+    if not os.path.exists(DB_DIR):
+        os.makedirs(DB_DIR, exist_ok=True)
+
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
 
 class UsuarioDAO:
     def __init__(self):
-        self.conn = sqlite3.connect(DB_PATH)
+        self.conn = garantir_banco()
         self.criar_tabelas()
         self.criar_admin_inicial()
 
@@ -101,14 +111,13 @@ class UsuarioDAO:
     # AUTENTICAÇÃO
     # ==========================
     def autenticar(self, nome, senha):
-        senha_hash = self.hash_senha(senha)
-
         cur = self.conn.cursor()
         cur.execute(
             "SELECT id, admin FROM usuarios WHERE nome=? AND senha=?",
-            (nome, senha_hash)
+            (nome, self.hash_senha(senha))
         )
         return cur.fetchone()
+
 
     def listar_usuarios(self):
         cur = self.conn.cursor()
@@ -136,10 +145,11 @@ class UsuarioDAO:
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO usuarios (nome, senha, admin) VALUES (?, ?, ?)",
-            (nome, senha, admin)
+            (nome, self.hash_senha(senha), admin)
         )
         self.conn.commit()
         return cur.lastrowid
+
 
 
     def salvar_permissoes(self, usuario_id, permissoes):
@@ -162,13 +172,14 @@ class UsuarioDAO:
         return cur.fetchone()
 
 
-    def atualizar_usuario(self, usuario_id, nome, admin):
+    def atualizar_senha(self, usuario_id, nova_senha):
         cur = self.conn.cursor()
         cur.execute(
-            "UPDATE usuarios SET nome=?, admin=? WHERE id=?",
-            (nome, admin, usuario_id)
+            "UPDATE usuarios SET senha=? WHERE id=?",
+            (self.hash_senha(nova_senha), usuario_id)
         )
         self.conn.commit()
+
 
 
     def atualizar_senha(self, usuario_id, senha):
@@ -197,36 +208,104 @@ class TelaLogin:
         self.root = root
         self.dao = UsuarioDAO()
 
-        self.root.title("Login - Sistema Fiscal")
-        self.root.geometry("600x500")
+        self.root.title("MTSistem - Login")
         self.root.configure(bg=CORES['bg_main'])
 
+        # Tamanho responsivo
+        largura = int(self.root.winfo_screenwidth() * 0.35)
+        altura = int(self.root.winfo_screenheight() * 0.55)
+        self.root.geometry(f"{largura}x{altura}")
+        self.root.minsize(500, 450)
+        self.root.resizable(True, True)
+
+        # ÍCONE
+        caminho_icone = resource_path("Icones/logo.ico")
+        self.root.iconbitmap(caminho_icone)
+
+        self.centralizar_janela()
+        configurar_estilo()
         self.criar_interface()
 
+    def centralizar_janela(self):
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+
     def criar_interface(self):
-        frame = ttk.Frame(self.root, style="Main.TFrame", padding=30)
-        frame.pack(fill="both", expand=True)
+        # =========================
+        # FRAME PRINCIPAL
+        # =========================
+        main_frame = ttk.Frame(self.root, style="Main.TFrame", padding=30)
+        main_frame.pack(fill="both", expand=True)
+
+        # =========================
+        # LOGO
+        # =========================
+        caminho_logo = resource_path("Icones/logo.png")
+        img = Image.open(caminho_logo)
+        img = img.resize((80, 80), Image.LANCZOS)
+        self.logo_img = ImageTk.PhotoImage(img)
 
         ttk.Label(
-            frame,
-            text="Selecione o usuário",
-            font=('Segoe UI', 16, 'bold')
-        ).pack(pady=20)
+            main_frame,
+            image=self.logo_img,
+            background=CORES['bg_main']
+        ).pack(pady=(0, 15))
+
+        ttk.Label(
+            main_frame,
+            text="Sistema Fiscal",
+            font=('Segoe UI', 20, 'bold'),
+            foreground=CORES['text_dark'],
+            background=CORES['bg_main']
+        ).pack()
+
+        ttk.Label(
+            main_frame,
+            text="Selecione o usuário para entrar",
+            font=('Segoe UI', 10),
+            foreground=CORES['text_light'],
+            background=CORES['bg_main']
+        ).pack(pady=(5, 25))
+
+        # =========================
+        # CARD DE USUÁRIOS
+        # =========================
+        card = ttk.Frame(main_frame, style="Card.TFrame", padding=25)
+        card.pack(fill="x")
 
         for user_id, nome, admin in self.dao.listar_usuarios():
+            texto = f"{nome} {'(Admin)' if admin else ''}"
+
             btn = ttk.Button(
-                frame,
-                text=f"{nome} {'(Admin)' if admin else ''}",
+                card,
+                text=texto,
                 command=lambda i=user_id, n=nome: self.pedir_senha(i, n)
             )
-            btn.pack(fill="x", pady=5)
+            btn.pack(fill="x", pady=6)
+
+        # =========================
+        # RODAPÉ
+        # =========================
+        ttk.Label(
+            main_frame,
+            text="© MTSistem • Desenvolvido por Miquéias Teles",
+            font=('Segoe UI', 8),
+            foreground=CORES['text_light'],
+            background=CORES['bg_main']
+        ).pack(pady=(30, 0))
 
     def pedir_senha(self, usuario_id, nome):
         senha = simpledialog.askstring(
             "Senha",
             f"Digite a senha do usuário {nome}:",
-            show="*"
+            show="*",
+            parent=self.root
         )
+
         if not senha:
             return
 
@@ -234,10 +313,11 @@ class TelaLogin:
         if auth:
             self.root.destroy()
             root = tk.Tk()
-            SistemaFiscal(root, usuario_id=usuario_id)
+            SistemaFiscal(root, usuario_id=usuario_id, usuario_nome=nome)
             root.mainloop()
         else:
-            messagebox.showerror("Erro", "Senha incorreta")
+            messagebox.showerror("Erro", "Senha incorreta", parent=self.root)
+
 
 # =====================================================
 # Tela de Cadastro de Usuários e Permissões
@@ -253,8 +333,21 @@ class TelaUsuariosAdmin:
         self.janela.geometry("900x600")
         self.janela.configure(bg=CORES['bg_main'])
 
+        # ÍCONE
+        caminho_icone = resource_path("Icones/logo.ico")
+        self.janela.iconbitmap(caminho_icone)
+
+        self.centralizar_janela()
         self.criar_interface()
         self.carregar_usuarios()
+
+    def centralizar_janela(self):
+        self.janela.update_idletasks()
+        width = self.janela.winfo_width()
+        height = self.janela.winfo_height()
+        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
+        self.janela.geometry(f"{width}x{height}+{x}+{y}")    
 
     def criar_interface(self):
         container = ttk.Frame(self.janela, padding=20)
@@ -382,7 +475,7 @@ class TelaUsuariosAdmin:
         self.var_admin.set(0)
         for var in self.vars_permissoes.values():
             var.set(0)
-
+    
     def salvar(self):
         nome = self.entry_nome.get().strip()
         senha = self.entry_senha.get().strip()
@@ -443,8 +536,6 @@ def pasta_dados_app(nome_app="MTSistem"):
     base = os.path.join(os.path.expanduser("~"), "Documents", nome_app)
     os.makedirs(base, exist_ok=True)
     return base
-
-
 
 
 # =====================================================
@@ -532,91 +623,78 @@ def configurar_estilo():
 # Extração Informações TXT → Excel
 # =====================================================
 
-class ExtratorFiscalApp:
-    def __init__(self, parent_window):
-        self.parent_window = parent_window
-        self.janela = tk.Toplevel()
-        self.janela.deiconify()
-        self.janela.lift()
-        self.janela.focus_force()
-        self.janela.title("MTSistem - Extração TXT → Excel")
-        self.janela.geometry("800x700")
-        self.janela.resizable(False, False)
-        self.janela.configure(bg=CORES['bg_main'])
-
-        # ÍCONE DA JANELA
-        caminho_icone = resource_path("Icones/logo.ico")
-        self.janela.iconbitmap(caminho_icone)
-
-
-        self.parent_window.withdraw()
-        self.centralizar_janela()
-        self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
-
+class ExtratorFiscalAppEmbed:
+    def __init__(self, parent_frame, sistema_fiscal):
+        self.parent_frame = parent_frame
+        self.sistema_fiscal = sistema_fiscal
+        self.arquivo_pdf = None
         self.criar_interface()
-
-
-    def fechar(self):
-        self.parent_window.deiconify()
-        self.janela.destroy()
-
-    def centralizar_janela(self):
-        self.janela.update_idletasks()
-        width = self.janela.winfo_width()
-        height = self.janela.winfo_height()
-        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
-        self.janela.geometry(f'{width}x{height}+{x}+{y}')
 
     def criar_interface(self):
         # Frame principal
-        main_frame = ttk.Frame(self.janela, style='Main.TFrame', padding=20)
-        main_frame.pack(fill="both", expand=True)
-        
-        # Cabeçalho
+        main_frame = ttk.Frame(self.parent_frame, style='Main.TFrame')
+        main_frame.pack(fill="both", expand=True, padx=50, pady=30)
+
+        # Header
         header_frame = ttk.Frame(main_frame, style='Main.TFrame')
-        header_frame.pack(fill="x", pady=(0, 20))
+        header_frame.pack(fill="x", pady=(0, 30))
 
-        # Linha do título
-        header_line = ttk.Frame(header_frame, style='Main.TFrame')
-        header_line.pack(fill="x")
+        header_container = ttk.Frame(header_frame, style='Main.TFrame')
+        header_container.pack(fill="x")
 
-        # ÍCONE DO HEADER
-        caminho_icone = resource_path("Icones/txt.png")
+        # Ícone e título
+        left_header = ttk.Frame(header_container, style='Main.TFrame')
+        left_header.pack(side="left")
+
+
+        caminho_icone = resource_path("Icones/txt_azul.png")
         img = Image.open(caminho_icone)
         img = img.resize((32, 32), Image.LANCZOS)
         self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
 
 
         ttk.Label(
-            header_line,
-            text="Extração TXT → Excel",
+            left_header,
             image=self.icon_header,
-            compound="left",  # ícone à esquerda do texto
-            font=('Segoe UI', 16, 'bold'),
-            foreground=CORES['text_dark'],
-            style="Main.TLabel"
-        ).pack(side="left")
+            background=CORES['bg_main']
+        ).pack(side="left", padx=(0, 15))
 
-        ttk.Button(
-            header_line,
-            text="← Voltar",
-            style="Voltar.TButton",
-            command=self.fechar
-        ).pack(side="right")
+        title_frame = ttk.Frame(left_header, style='Main.TFrame')
+        title_frame.pack(side="left")
 
-        
         ttk.Label(
-            header_frame,
+            title_frame,
+            text="Extração TXT → Excel",
+            font=('Segoe UI', 18, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
+        ttk.Label(
+            title_frame,
             text="Extraia informações fiscais de arquivos TXT para planilhas Excel",
             font=('Segoe UI', 9),
             background=CORES['bg_main'],
             foreground=CORES['text_light']
-        ).pack(anchor="w", pady=(5, 0))
-        
+        ).pack(anchor="w")
+
         # Card de conteúdo
-        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
-        card.pack(fill="both", expand=True)
+        content_container = ttk.Frame(main_frame, style='Main.TFrame')
+        content_container.pack(fill="both", expand=True)
+
+        center_frame = ttk.Frame(content_container, style='Main.TFrame')
+        center_frame.pack(expand=True)
+
+        card = ttk.Frame(center_frame, style='Card.TFrame', padding=40)
+        card.pack(fill="both", expand=True, ipadx=100)
+
+        ttk.Label(
+            card,
+            text="Configuração da Extração",
+            font=('Segoe UI', 14, 'bold'),
+            background=CORES['bg_card'],
+            foreground=CORES['primary']
+        ).pack(anchor="w", pady=(0, 25))
         
         # Campos de entrada
         self.lbl_arquivo = self.criar_campo(
@@ -770,97 +848,80 @@ class ExtratorFiscalApp:
 # TRIAGEM SPED → PDFs
 # =====================================================
 
-class TriagemSPED:
-    def __init__(self, parent_window):
-        self.parent_window = parent_window
-        self.janela = tk.Toplevel()
-        self.janela.deiconify()
-        self.janela.lift()
-        self.janela.focus_force()
-        self.janela.title("MTSistem - Triagem SPED para PDFs")
-        self.janela.geometry("800x700")
-        self.janela.resizable(False, False)
-        self.janela.configure(bg=CORES['bg_main'])
-
-        # ÍCONE DA JANELA
-        caminho_icone = resource_path("Icones/logo.ico")
-        self.janela.iconbitmap(caminho_icone)
-
-
-        # Pasta padrão
+class TriagemSPEDEmbed:
+    def __init__(self, parent_frame, sistema_fiscal):
+        self.parent_frame = parent_frame
+        self.sistema_fiscal = sistema_fiscal
+        self.arquivo_pdf = None
         base_dados = pasta_dados_app()
         self.pasta_padrao = os.path.join(base_dados, "Arquivos Notas PDF")
         os.makedirs(self.pasta_padrao, exist_ok=True)
-
-        self.parent_window.withdraw()
-        self.centralizar_janela()
-        self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
-
         self.criar_interface()
-
-
-    def fechar(self):
-        self.parent_window.deiconify()
-        self.janela.destroy()
-
-    def centralizar_janela(self):
-        self.janela.update_idletasks()
-        width = self.janela.winfo_width()
-        height = self.janela.winfo_height()
-        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
-        self.janela.geometry(f'{width}x{height}+{x}+{y}')
 
     def criar_interface(self):
         # Frame principal
-        main_frame = ttk.Frame(self.janela, style='Main.TFrame', padding=20)
-        main_frame.pack(fill="both", expand=True)
-        
-        # Cabeçalho
+        main_frame = ttk.Frame(self.parent_frame, style='Main.TFrame')
+        main_frame.pack(fill="both", expand=True, padx=50, pady=30)
+
+        # Header
         header_frame = ttk.Frame(main_frame, style='Main.TFrame')
-        header_frame.pack(fill="x", pady=(0, 20))
+        header_frame.pack(fill="x", pady=(0, 30))
 
-        # Linha do título
-        header_line = ttk.Frame(header_frame, style='Main.TFrame')
-        header_line.pack(fill="x")
+        header_container = ttk.Frame(header_frame, style='Main.TFrame')
+        header_container.pack(fill="x")
 
-    
-        # ÍCONE DO HEADER
-        caminho_icone = resource_path("Icones/sped.png")
+        # Ícone e título
+        left_header = ttk.Frame(header_container, style='Main.TFrame')
+        left_header.pack(side="left")
+
+        caminho_icone = resource_path("Icones/sped_azul.png")
         img = Image.open(caminho_icone)
         img = img.resize((32, 32), Image.LANCZOS)
         self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
 
 
         ttk.Label(
-            header_line,
-            text="  Triagem SPED → PDFs",
+            left_header,
             image=self.icon_header,
-            compound="left",  # ícone à esquerda do texto
-            font=('Segoe UI', 16, 'bold'),
-            foreground=CORES['text_dark'],
-            style="Main.TLabel"
-        ).pack(side="left")
+            background=CORES['bg_main']
+        ).pack(side="left", padx=(0, 15))
 
-        ttk.Button(
-            header_line,
-            text="← Voltar",
-            style="Voltar.TButton",
-            command=self.fechar
-        ).pack(side="right")
+        title_frame = ttk.Frame(left_header, style='Main.TFrame')
+        title_frame.pack(side="left")
 
-        
         ttk.Label(
-            header_frame,
-            text="Extraia e mescle PDFs de NF-e e CT-e a partir do arquivo SPED",
+            title_frame,
+            text="Triagem SPED → PDFs",
+            font=('Segoe UI', 18, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
+        ttk.Label(
+            title_frame,
+            text="Extraia informações do SPED e gere PDFs mesclados das notas fiscais",
             font=('Segoe UI', 9),
             background=CORES['bg_main'],
             foreground=CORES['text_light']
-        ).pack(anchor="w", pady=(5, 0))
-        
+        ).pack(anchor="w")
+
         # Card de conteúdo
-        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
-        card.pack(fill="both", expand=True)
+        content_container = ttk.Frame(main_frame, style='Main.TFrame')
+        content_container.pack(fill="both", expand=True)
+
+        center_frame = ttk.Frame(content_container, style='Main.TFrame')
+        center_frame.pack(expand=True)
+
+        card = ttk.Frame(center_frame, style='Card.TFrame', padding=40)
+        card.pack(fill="both", expand=True, ipadx=100)
+
+        ttk.Label(
+            card,
+            text="Configuração da Triagem SPED",
+            font=('Segoe UI', 14, 'bold'),
+            background=CORES['bg_card'],
+            foreground=CORES['primary']
+        ).pack(anchor="w", pady=(0, 25))
         
         # Campos de entrada
         self.entry_sped = self.criar_campo(
@@ -1041,98 +1102,78 @@ class TriagemSPED:
 # COMPARADOR DE NOTAS
 # =====================================================
 
-class ComparadorNotas:
-    def __init__(self, parent_window):
-        self.parent_window = parent_window
-        self.janela = tk.Toplevel()
-        self.janela.deiconify()
-        self.janela.lift()
-        self.janela.focus_force()
-        self.janela.title("MTSistem - Comparador de Notas")
-        self.janela.geometry("800x700")
-        self.janela.resizable(False, False)
-        self.janela.configure(bg=CORES['bg_main'])
-
-        # ÍCONE DA JANELA
-        caminho_icone = resource_path("Icones/logo.ico")
-        self.janela.iconbitmap(caminho_icone)
-
-
-        self.sefaz = None
-        self.sistema = None
-        
-        # Ocultar janela principal
-        self.parent_window.withdraw()
-        
-        # Centralizar janela
-        self.centralizar_janela()
-        
-        # Ao fechar, mostrar janela principal novamente
-        self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
-        
+class ComparadorNotasEmbed:
+    def __init__(self, parent_frame, sistema_fiscal):
+        self.parent_frame = parent_frame
+        self.sistema_fiscal = sistema_fiscal
+        self.arquivo_pdf = None
         self.criar_interface()
-
-    def fechar(self):
-        self.parent_window.deiconify()
-        self.janela.destroy()
-
-    def centralizar_janela(self):
-        self.janela.update_idletasks()
-        width = self.janela.winfo_width()
-        height = self.janela.winfo_height()
-        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
-        self.janela.geometry(f'{width}x{height}+{x}+{y}')
+   
 
     def criar_interface(self):
         # Frame principal
-        main_frame = ttk.Frame(self.janela, style='Main.TFrame', padding=20)
-        main_frame.pack(fill="both", expand=True)
-        
-        # Cabeçalho
-        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
-        header_frame.pack(fill="x", pady=(0, 20))
+        main_frame = ttk.Frame(self.parent_frame, style='Main.TFrame')
+        main_frame.pack(fill="both", expand=True, padx=50, pady=30)
 
-        # Linha do título
-        header_line = ttk.Frame(header_frame, style='Main.TFrame')
-        header_line.pack(fill="x")
+        # Header
+        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
+        header_frame.pack(fill="x", pady=(0, 30))
+
+        header_container = ttk.Frame(header_frame, style='Main.TFrame')
+        header_container.pack(fill="x")
+
+        # Ícone e título
+        left_header = ttk.Frame(header_container, style='Main.TFrame')
+        left_header.pack(side="left")
 
         # ÍCONE DO HEADER
-        caminho_icone = resource_path("Icones/comparador.png")
+        caminho_icone = resource_path("Icones/comparador_azul.png")
         img = Image.open(caminho_icone)
         img = img.resize((32, 32), Image.LANCZOS)
         self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
 
+        ttk.Label(
+            left_header,
+            image=self.icon_header,
+            background=CORES['bg_main']
+        ).pack(side="left", padx=(0, 15))
+
+        title_frame = ttk.Frame(left_header, style='Main.TFrame')
+        title_frame.pack(side="left")
 
         ttk.Label(
-            header_line,
+            title_frame,
             text="Comparador de Notas Fiscais",
-            image=self.icon_header,
-            compound="left",  # ícone à esquerda do texto
-            font=('Segoe UI', 16, 'bold'),
-            foreground=CORES['text_dark'],
-            style="Main.TLabel"
-        ).pack(side="left")
-
-        ttk.Button(
-            header_line,
-            text="← Voltar",
-            style="Voltar.TButton",
-            command=self.fechar
-        ).pack(side="right")
-
+            font=('Segoe UI', 18, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
         
         ttk.Label(
-            header_frame,
+            title_frame,
             text="Compare notas fiscais entre SEFAZ e Sistema interno",
             font=('Segoe UI', 9),
             background=CORES['bg_main'],
             foreground=CORES['text_light']
-        ).pack(anchor="w", pady=(5, 0))
+        ).pack(anchor="w")
         
         # Card de conteúdo
-        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
-        card.pack(fill="both", expand=True)
+        content_container = ttk.Frame(main_frame, style='Main.TFrame')
+        content_container.pack(fill="both", expand=True)
+
+        center_frame = ttk.Frame(content_container, style='Main.TFrame')
+        center_frame.pack(expand=True)
+
+        card = ttk.Frame(center_frame, style='Card.TFrame', padding=40)
+        card.pack(fill="both", expand=True, ipadx=100)
+
+        ttk.Label(
+            card,
+            text="Configuração da Comparação",
+            font=('Segoe UI', 14, 'bold'),
+            background=CORES['bg_card'],
+            foreground=CORES['primary']
+        ).pack(anchor="w", pady=(0, 25))
         
         # Arquivo SEFAZ
         self.criar_card_arquivo(
@@ -1403,134 +1444,530 @@ class ComparadorNotas:
 # =====================================================
 # Extração Informações PDF → Excel
 # =====================================================
-class ExtratorFiscalPDFApp:
-    def __init__(self, parent_window):
-        self.parent_window = parent_window
-        self.janela = tk.Toplevel()
-        self.janela.deiconify()
-        self.janela.lift()
-        self.janela.focus_force()
-        self.janela.title("MTSistem - Extração PDF → Excel")
-        self.janela.geometry("800x700")
-        self.janela.resizable(False, False)
-        self.janela.configure(bg=CORES['bg_main'])
+class SistemaFiscal:
+    def __init__(self, root, usuario_id, usuario_nome):
+        self.root = root
+        self.usuario_id = usuario_id
+        self.usuario_nome = usuario_nome
+        self.dao = UsuarioDAO()
+        root.title("MT Sistem - Sistema Fiscal")
+        
+        # Janela maximizada
+        root.state('zoomed')
+        root.minsize(1000, 600)
+        root.resizable(True, True)
+        root.configure(bg=CORES['bg_main'])
 
+        # ÍCONE DA JANELA
         caminho_icone = resource_path("Icones/logo.ico")
-        self.janela.iconbitmap(caminho_icone)
+        self.root.iconbitmap(caminho_icone)
 
-        self.parent_window.withdraw()
-        self.centralizar_janela()
-        self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
-
-        self.arquivo_pdf = None
-
+        configurar_estilo()
+        
+        # Container para o conteúdo dinâmico
+        self.content_area = None
+        
         self.criar_interface()
 
-    def fechar(self):
-        self.parent_window.deiconify()
-        self.janela.destroy()
+    def abrir_extrator(self):
+        self.limpar_content_area()
+        ExtratorFiscalAppEmbed(self.content_area, self)
 
-    def centralizar_janela(self):
-        self.janela.update_idletasks()
-        width = self.janela.winfo_width()
-        height = self.janela.winfo_height()
-        x = (self.janela.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.janela.winfo_screenheight() // 2) - (height // 2)
-        self.janela.geometry(f'{width}x{height}+{x}+{y}')
+    def abrir_triagem(self):
+        self.limpar_content_area()
+        TriagemSPEDEmbed(self.content_area, self)
+
+    def abrir_comparador(self):
+        self.limpar_content_area()
+        ComparadorNotasEmbed(self.content_area, self)
+
+    def abrir_extrator_pdf(self):
+        self.limpar_content_area()
+        ExtratorFiscalPDFAppEmbed(self.content_area, self)
+
+    def voltar_home(self):
+        self.limpar_content_area()
+        self.mostrar_home()
+
+    def limpar_content_area(self):
+        """Limpa a área de conteúdo"""
+        if self.content_area:
+            for widget in self.content_area.winfo_children():
+                widget.destroy()
 
     def criar_interface(self):
-        main_frame = ttk.Frame(self.janela, style='Main.TFrame', padding=20)
-        main_frame.pack(fill="both", expand=True)
+        # =========================
+        # CONTAINER PRINCIPAL
+        # =========================
+        main_container = ttk.Frame(self.root, style='Main.TFrame')
+        main_container.pack(fill="both", expand=True)
 
-        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
-        header_frame.pack(fill="x", pady=(0, 20))
+        # =========================
+        # SIDEBAR LATERAL
+        # =========================
+        sidebar = tk.Frame(main_container, bg=CORES['primary'], width=280)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
-        header_line = ttk.Frame(header_frame, style='Main.TFrame')
-        header_line.pack(fill="x")
+        # Logo e título no sidebar
+        logo_frame = tk.Frame(sidebar, bg=CORES['primary'])
+        logo_frame.pack(fill="x", pady=(30, 20))
 
-        # ÍCONE DO HEADER
-        caminho_icone = resource_path("Icones/pdf.png")
-        img = Image.open(caminho_icone)
-        img = img.resize((32, 32), Image.LANCZOS)
-        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+        caminho_logo = resource_path("Icones/logo_branca.png")
+        img = Image.open(caminho_logo)
+        img = img.resize((60, 60), Image.LANCZOS)
+        self.logo_img = ImageTk.PhotoImage(img)
 
+        tk.Label(
+            logo_frame,
+            image=self.logo_img,
+            bg=CORES['primary']
+        ).pack()
 
-        ttk.Label(
-            header_line,
-            text="  Extração PDF → Excel",
-            image=self.icon_header,
-            compound="left",  # ícone à esquerda do texto
+        tk.Label(
+            logo_frame,
+            text="Sistema Fiscal",
             font=('Segoe UI', 16, 'bold'),
-            foreground=CORES['text_dark'],
-            style="Main.TLabel"
-        ).pack(side="left")
+            bg=CORES['primary'],
+            fg='white'
+        ).pack(pady=(10, 5))
 
-        ttk.Button(
-            header_line,
-            text="← Voltar",
-            style="Voltar.TButton",
-            command=self.fechar
-        ).pack(side="right")
+        tk.Label(
+            logo_frame,
+            text="MT Sistem",
+            font=('Segoe UI', 9),
+            bg=CORES['primary'],
+            fg='white'
+        ).pack()
+
+        # Separador
+        tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=20, padx=20)
+
+        # Verificar permissões
+        dao = UsuarioDAO()
+        is_admin = dao.is_admin(self.usuario_id)
+        permissoes = dao.permissoes_usuario(self.usuario_id)
+
+        # Menu de navegação
+        menu_frame = tk.Frame(sidebar, bg=CORES['primary'])
+        menu_frame.pack(fill="both", expand=True, pady=10)
+
+        # Botão Home
+        self.criar_menu_item(
+            menu_frame,
+            "Início",
+            self.voltar_home,
+            icone="inicio.png"
+        )
+
+        # Módulos
+        if is_admin or "abrir_extrator" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Extrator TXT → Excel",
+                self.abrir_extrator,
+                icone="txt.png"
+            )
+
+        if is_admin or "abrir_comparador" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Comparador SEFAZ",
+                self.abrir_comparador,
+                icone="comparador.png"
+            )
+
+        if is_admin or "abrir_triagem" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Triagem SPED",
+                self.abrir_triagem,
+                icone="sped.png"
+            )
+
+        if is_admin or "abrir_extrator_pdf" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Extrator PDF → Excel",
+                self.abrir_extrator_pdf,
+                icone="pdf.png"
+            )
+
+        # Separador
+        tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=10, padx=20)
+
+        # Admin
+        if is_admin:
+            self.criar_menu_item(
+                menu_frame,
+                "⚙️ Usuários",
+                lambda: TelaUsuariosAdmin(self.root),
+                is_admin_btn=True,
+            )
+
+        # Rodapé do sidebar
+        footer_sidebar = tk.Frame(sidebar, bg=CORES['primary'])
+        footer_sidebar.pack(fill="x", side="bottom", pady=20)
+
+        # Info do usuário
+        tk.Label(
+            footer_sidebar,
+            text=f"👤 {self.usuario_nome}",
+            font=('Segoe UI', 9),
+            bg=CORES['primary'],
+            fg='white'
+        ).pack(pady=(0, 10))
+
+        # Botão sair
+        btn_sair = tk.Button(
+            footer_sidebar,
+            text="🚪 Sair",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=CORES['primary'],
+            relief='flat',
+            cursor='hand2',
+            padx=20,
+            pady=8,
+            command=self.sair
+        )
+        btn_sair.pack()
+
+        def sair_hover_enter(e):
+            btn_sair.config(bg=CORES['bg_card_hover'])
+        
+        def sair_hover_leave(e):
+            btn_sair.config(bg='white')
+
+        btn_sair.bind("<Enter>", sair_hover_enter)
+        btn_sair.bind("<Leave>", sair_hover_leave)
+
+        # =========================
+        # ÁREA DE CONTEÚDO
+        # =========================
+        self.content_area = ttk.Frame(main_container, style='Main.TFrame')
+        self.content_area.pack(side="right", fill="both", expand=True)
+
+        # Mostrar tela inicial
+        self.mostrar_home()
+
+    def criar_menu_item(self, parent, texto, comando, icone=None, is_admin_btn=False):
+        btn_frame = tk.Frame(parent, bg=CORES['primary'])
+        btn_frame.pack(fill="x", padx=15, pady=5)
+
+        btn = tk.Frame(btn_frame, bg=CORES['primary'], cursor='hand2')
+        btn.pack(fill="x", pady=2)
+
+        inner = tk.Frame(btn, bg=CORES['primary'])
+        inner.pack(fill="x", padx=15, pady=10)
+
+        # Ícone
+        if icone and not is_admin_btn:
+            caminho_icone = resource_path(f"Icones/{icone}")
+            img = Image.open(caminho_icone)
+            img = img.resize((24, 24), Image.LANCZOS)
+            icon_img = ImageTk.PhotoImage(img)
+
+            lbl_icon = tk.Label(inner, image=icon_img, bg=CORES['primary'])
+            lbl_icon.image = icon_img
+            lbl_icon.pack(side="left", padx=(0, 10))
+
+        # Texto
+        lbl_text = tk.Label(
+            inner,
+            text=texto,
+            font=('Segoe UI', 10, 'bold') if is_admin_btn else ('Segoe UI', 10),
+            bg=CORES['primary'],
+            fg='white',
+            anchor='w'
+        )
+        lbl_text.pack(side="left", fill="x")
+
+        # Hover effects
+        def on_enter(e):
+            btn.config(bg='white')
+            inner.config(bg='white')
+            lbl_text.config(bg='white', fg=CORES['primary'])
+            if icone and not is_admin_btn:
+                lbl_icon.config(bg='white')
+
+        def on_leave(e):
+            btn.config(bg=CORES['primary'])
+            inner.config(bg=CORES['primary'])
+            lbl_text.config(bg=CORES['primary'], fg='white')
+            if icone and not is_admin_btn:
+                lbl_icon.config(bg=CORES['primary'])
+
+        def on_click(e):
+            comando()
+
+        for widget in [btn, inner, lbl_text]:
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+            widget.bind("<Button-1>", on_click)
+
+        if icone and not is_admin_btn:
+            lbl_icon.bind("<Enter>", on_enter)
+            lbl_icon.bind("<Leave>", on_leave)
+            lbl_icon.bind("<Button-1>", on_click)
+
+    def mostrar_home(self):
+        """Tela inicial com boas-vindas"""
+        home_frame = ttk.Frame(self.content_area, style='Main.TFrame')
+        home_frame.pack(fill="both", expand=True, padx=50, pady=50)
+
+        # Cabeçalho
+        ttk.Label(
+            home_frame,
+            text="Bem-vindo ao Sistema Fiscal",
+            font=('Segoe UI', 24, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(pady=(0, 10))
 
         ttk.Label(
-            header_frame,
+            home_frame,
+            text=f"Olá, {self.usuario_nome}! Selecione um módulo no menu lateral para começar.",
+            font=('Segoe UI', 11),
+            background=CORES['bg_main'],
+            foreground=CORES['text_light']
+        ).pack(pady=(0, 40))
+
+        # Cards informativos
+        cards_container = ttk.Frame(home_frame, style='Main.TFrame')
+        cards_container.pack(fill="both", expand=True)
+
+        # Grid para os cards
+        cards_container.grid_columnconfigure(0, weight=1)
+        cards_container.grid_columnconfigure(1, weight=1)
+        cards_container.grid_rowconfigure(0, weight=1)
+        cards_container.grid_rowconfigure(1, weight=1)
+
+        # Card 1
+        self.criar_info_card(
+            cards_container, 0, 0,
+            "📊 Extração Automatizada",
+            "Extraia dados fiscais de arquivos TXT e PDF diretamente para Excel com poucos cliques."
+        )
+
+        # Card 2
+        self.criar_info_card(
+            cards_container, 0, 1,
+            "🔍 Comparação Inteligente",
+            "Compare notas da SEFAZ com seu sistema e identifique divergências rapidamente."
+        )
+
+        # Card 3
+        self.criar_info_card(
+            cards_container, 1, 0,
+            "📁 Triagem de Documentos",
+            "Organize e mescle automaticamente PDFs de NF-e e CT-e a partir do SPED."
+        )
+
+        # Card 4
+        self.criar_info_card(
+            cards_container, 1, 1,
+            "⚡ Gestão Eficiente",
+            "Centralize toda gestão fiscal em um único sistema profissional e intuitivo."
+        )
+
+        # Rodapé
+        footer = ttk.Frame(home_frame, style='Main.TFrame')
+        footer.pack(fill="x", pady=(40, 0))
+        
+        ttk.Label(
+            footer,
+            text="v1.0 • MTSistem - Desenvolvido e licenciado por Miquéias Teles",
+            font=('Segoe UI', 8),
+            background=CORES['bg_main'],
+            foreground=CORES['text_light']
+        ).pack()
+
+    def criar_info_card(self, parent, row, col, titulo, descricao):
+        card = tk.Frame(
+            parent,
+            bg='white',
+            highlightthickness=2,
+            highlightbackground=CORES['bg_main']
+        )
+        card.grid(row=row, column=col, padx=15, pady=15, sticky="nsew")
+
+        inner = tk.Frame(card, bg='white')
+        inner.pack(fill="both", expand=True, padx=25, pady=25)
+
+        tk.Label(
+            inner,
+            text=titulo,
+            font=('Segoe UI', 13, 'bold'),
+            bg='white',
+            fg=CORES['primary'],
+            anchor='w'
+        ).pack(fill="x", pady=(0, 10))
+
+        tk.Label(
+            inner,
+            text=descricao,
+            font=('Segoe UI', 10),
+            bg='white',
+            fg=CORES['text_light'],
+            anchor='w',
+            wraplength=250,
+            justify='left'
+        ).pack(fill="x")
+
+    def sair(self):
+        resposta = messagebox.askyesno(
+            "Sair do sistema",
+            "Deseja sair e voltar para a tela de login?"
+        )
+        if not resposta:
+            return
+
+        self.root.destroy()
+
+        root = tk.Tk()
+        TelaLogin(root)
+        root.mainloop()
+
+
+# =========================
+# VERSÃO EMBED DO EXTRATOR PDF
+# =========================
+class ExtratorFiscalPDFAppEmbed:
+    def __init__(self, parent_frame, sistema_fiscal):
+        self.parent_frame = parent_frame
+        self.sistema_fiscal = sistema_fiscal
+        self.arquivo_pdf = None
+        self.criar_interface()
+
+    def criar_interface(self):
+        # Frame principal
+        main_frame = ttk.Frame(self.parent_frame, style='Main.TFrame')
+        main_frame.pack(fill="both", expand=True, padx=50, pady=30)
+
+        # Header
+        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
+        header_frame.pack(fill="x", pady=(0, 30))
+
+        header_container = ttk.Frame(header_frame, style='Main.TFrame')
+        header_container.pack(fill="x")
+
+        # Ícone e título
+        left_header = ttk.Frame(header_container, style='Main.TFrame')
+        left_header.pack(side="left")
+
+        caminho_icone = resource_path("Icones/pdf_azul.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((40, 40), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)
+
+        ttk.Label(
+            left_header,
+            image=self.icon_header,
+            background=CORES['bg_main']
+        ).pack(side="left", padx=(0, 15))
+
+        title_frame = ttk.Frame(left_header, style='Main.TFrame')
+        title_frame.pack(side="left")
+
+        ttk.Label(
+            title_frame,
+            text="Extração PDF → Excel",
+            font=('Segoe UI', 18, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
+        ttk.Label(
+            title_frame,
             text="Extraia informações fiscais de relatórios em PDF",
             font=('Segoe UI', 9),
             background=CORES['bg_main'],
             foreground=CORES['text_light']
-        ).pack(anchor="w", pady=(5, 0))
+        ).pack(anchor="w")
 
-        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
-        card.pack(fill="both", expand=True)
+        # Card de conteúdo
+        content_container = ttk.Frame(main_frame, style='Main.TFrame')
+        content_container.pack(fill="both", expand=True)
+
+        center_frame = ttk.Frame(content_container, style='Main.TFrame')
+        center_frame.pack(expand=True)
+
+        card = ttk.Frame(center_frame, style='Card.TFrame', padding=40)
+        card.pack(fill="both", expand=True, ipadx=100)
+
+        ttk.Label(
+            card,
+            text="Configuração da Extração",
+            font=('Segoe UI', 14, 'bold'),
+            background=CORES['bg_card'],
+            foreground=CORES['primary']
+        ).pack(anchor="w", pady=(0, 25))
 
         self.lbl_pdf = self.criar_campo(
             card,
             "Arquivo PDF (.pdf)",
-            "Selecione o relatório fiscal em PDF",
+            "Selecione o relatório fiscal em PDF para processamento",
             self.selecionar_pdf
         )
 
+        separator = ttk.Frame(card, height=2, style='Card.TFrame')
+        separator.pack(fill="x", pady=30)
+
         btn_frame = ttk.Frame(card, style='Card.TFrame')
-        btn_frame.pack(fill="x", pady=(20, 0))
+        btn_frame.pack(fill="x")
 
         ttk.Button(
             btn_frame,
             text="▶ Executar Extração e Exportar Excel",
             style='Primary.TButton',
             command=self.processar
-        ).pack(fill="x")
+        ).pack(fill="x", ipady=8)
 
     def criar_campo(self, parent, titulo, subtitulo, comando):
         campo_frame = ttk.Frame(parent, style='Card.TFrame')
-        campo_frame.pack(fill="x", pady=(0, 20))
+        campo_frame.pack(fill="x")
 
-        ttk.Label(campo_frame, text=titulo, style='Title.TLabel').pack(anchor="w")
-        ttk.Label(campo_frame, text=subtitulo, style='Subtitle.TLabel').pack(anchor="w", pady=(2, 8))
+        ttk.Label(
+            campo_frame,
+            text=titulo,
+            font=('Segoe UI', 11, 'bold'),
+            background=CORES['bg_card'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w", pady=(0, 5))
+
+        ttk.Label(
+            campo_frame,
+            text=subtitulo,
+            font=('Segoe UI', 9),
+            background=CORES['bg_card'],
+            foreground=CORES['text_light']
+        ).pack(anchor="w", pady=(0, 12))
 
         input_frame = ttk.Frame(campo_frame, style='Card.TFrame')
         input_frame.pack(fill="x")
 
-        entry = ttk.Entry(input_frame, font=('Segoe UI', 9))
-        entry.pack(side="left", fill="x", expand=True, ipady=5)
+        entry = ttk.Entry(input_frame, font=('Segoe UI', 10))
+        entry.pack(side="left", fill="x", expand=True, ipady=8)
 
         ttk.Button(
             input_frame,
-            text="📁 Selecionar",
+            text="📁 Selecionar Arquivo",
             style='Secondary.TButton',
             command=comando
-        ).pack(side="right", padx=(10, 0))
+        ).pack(side="right", padx=(15, 0))
 
         return entry
 
     def selecionar_pdf(self):
-        arquivo = filedialog.askopenfilename(filetypes=[("Arquivos PDF", "*.pdf")])
+        arquivo = filedialog.askopenfilename(
+            title="Selecione o arquivo PDF",
+            filetypes=[("Arquivos PDF", "*.pdf"), ("Todos os arquivos", "*.*")]
+        )
         if arquivo:
             self.lbl_pdf.delete(0, tk.END)
             self.lbl_pdf.insert(0, arquivo)
 
-    # ==============================
-    # PROCESSAMENTO FISCAL
-    # ==============================
     def processar(self):
         caminho_pdf = self.lbl_pdf.get()
         if not caminho_pdf:
@@ -1538,6 +1975,7 @@ class ExtratorFiscalPDFApp:
             return
 
         salvar_em = filedialog.asksaveasfilename(
+            title="Salvar planilha como",
             defaultextension=".xlsx",
             filetypes=[("Excel", "*.xlsx")]
         )
@@ -1545,7 +1983,6 @@ class ExtratorFiscalPDFApp:
             return
 
         dados = []
-
         nota_atual = {
             "Fornecedor": None,
             "Data de Emissao": None,
@@ -1563,29 +2000,24 @@ class ExtratorFiscalPDFApp:
                     for linha in texto.split("\n"):
                         linha = linha.strip()
 
-                        # Fornecedor
                         if linha.startswith("Fornecedor:"):
                             nota_atual["Fornecedor"] = linha.replace("Fornecedor:", "").strip()
 
-                        # Data
                         if "Emissão:" in linha:
                             data = re.search(r"\d{2}/\d{2}/\d{4}", linha)
                             if data:
                                 nota_atual["Data de Emissao"] = data.group()
 
-                        # Linha de produto → quantidade
                         if any(u in linha for u in [" Kg ", " SC ", " UN ", " TON "]):
                             qtd_match = re.search(r"\b\d{1,3}(?:\.\d{3})*,\d{2}\b", linha)
                             if qtd_match:
                                 qtd = float(qtd_match.group().replace(".", "").replace(",", "."))
                                 nota_atual["Quantidade"] += qtd
 
-                        # Pedido
                         pedido_match = re.search(r"\b(\d{6})/\d{2}\b", linha)
                         if pedido_match and nota_atual["Pedido"] is None:
                             nota_atual["Pedido"] = pedido_match.group(1)
 
-                        # Total da nota
                         if linha.startswith("TOTAL DA NOTA:"):
                             numero_match = re.search(r"/\s*(\d+)", linha)
                             valor = float(linha.split()[-1].replace(".", "").replace(",", "."))
@@ -1607,319 +2039,20 @@ class ExtratorFiscalPDFApp:
                             }
 
             if not dados:
-                messagebox.showwarning("Aviso", "Nenhuma nota encontrada.")
+                messagebox.showwarning("Aviso", "Nenhuma nota encontrada no arquivo PDF.")
                 return
 
             df = pd.DataFrame(dados)
             df["Data de Emissao"] = pd.to_datetime(df["Data de Emissao"], dayfirst=True, errors="coerce")
             df.to_excel(salvar_em, index=False)
 
-            messagebox.showinfo("Sucesso", f"Extração concluída!\nNotas extraídas: {len(df)}")
+            messagebox.showinfo(
+                "Sucesso", 
+                f"Extração concluída com sucesso!\n\nNotas extraídas: {len(df)}\nArquivo salvo em:\n{salvar_em}"
+            )
 
         except Exception as e:
-            messagebox.showerror("Erro", str(e))
-
-
-# =====================================================
-# TELA INICIAL
-# =====================================================
-
-class SistemaFiscal:
-    def __init__(self, root, usuario_id, usuario_nome):
-        self.root = root
-        self.usuario_id = usuario_id
-        self.dao = UsuarioDAO()
-        self.usuario_nome = usuario_nome
-        root.title("MT Sistem - Sistema Fiscal")
-        root.geometry("800x800")
-        root.resizable(False, False)
-        root.configure(bg=CORES['bg_main'])
-
-        # ÍCONE DA JANELA
-        caminho_icone = resource_path("Icones/logo.ico")
-        self.root.iconbitmap(caminho_icone)
-
-        self.centralizar_janela()
-        configurar_estilo()
-        self.criar_interface()
-
-    def centralizar_janela(self):
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f'{width}x{height}+{x}+{y}')
-
-    def abrir_extrator(self):
-        ExtratorFiscalApp(self.root)
-
-    def abrir_triagem(self):
-        TriagemSPED(self.root)    
-
-    def abrir_comparador(self):
-        ComparadorNotas(self.root)
-
-    def abrir_extrator_pdf(self):
-        ExtratorFiscalPDFApp(self.root)
-
-    def criar_interface(self):
-        # Frame principal
-        main_frame = ttk.Frame(self.root, style='Main.TFrame', padding=30)
-        main_frame.pack(fill="both", expand=True)
-        
-        # =========================
-        # HEADER
-        # =========================
-        header_frame = ttk.Frame(main_frame, style='Main.TFrame')
-        header_frame.pack(fill="x", pady=(0, 30))
-
-        header_top = ttk.Frame(header_frame, style='Main.TFrame')
-        header_top.pack(fill="x")
-
-        # Logo
-        caminho_logo = resource_path("Icones/logo.png")
-        img = Image.open(caminho_logo)
-        img = img.resize((70, 70), Image.LANCZOS)
-        self.logo_img = ImageTk.PhotoImage(img)
-
-        ttk.Label(
-            header_top,
-            image=self.logo_img,
-            background=CORES['bg_main']
-        ).pack(side="left")
-
-        # Usuário logado + botão sair
-        user_frame = ttk.Frame(header_top, style='Main.TFrame')
-        user_frame.pack(side="right")
-
-        ttk.Label(
-            user_frame,
-            text=f"👤 {self.usuario_nome}",
-            font=('Segoe UI', 9),
-            background=CORES['bg_main'],
-            foreground=CORES['text_light']
-        ).pack(anchor="e")
-
-        ttk.Button(
-            user_frame,
-            text="🚪 Sair",
-            style="Secondary.TButton",
-            command=self.sair
-        ).pack(anchor="e", pady=(5, 0))
-
-        # =========================
-        # TÍTULO
-        # =========================
-        ttk.Label(
-            header_frame,
-            text="Sistema Fiscal",
-            font=('Segoe UI', 22, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
-        ).pack(pady=(15, 5))
-        
-        ttk.Label(
-            header_frame,
-            text="Gestão e análise de documentos fiscais",
-            font=('Segoe UI', 10),
-            background=CORES['bg_main'],
-            foreground=CORES['text_light']
-        ).pack()
-
-        
-        # Card de módulos
-        card = ttk.Frame(main_frame, style='Card.TFrame', padding=25)
-        card.pack(fill="both", expand=True)
-        
-        ttk.Label(
-            card,
-            text="Selecione um módulo:",
-            font=('Segoe UI', 11, 'bold'),
-            background=CORES['bg_card'],
-            foreground=CORES['text_dark']
-        ).pack(anchor="w", pady=(0, 15))
-
-        # Verificar permissões do usuário
-        
-        dao = UsuarioDAO()
-
-        is_admin = dao.is_admin(self.usuario_id)
-        permissoes = dao.permissoes_usuario(self.usuario_id)
-
-        if is_admin:
-            ttk.Button(
-                main_frame,
-                text="Usuários e Permissões",
-                command=lambda: TelaUsuariosAdmin(self.root)
-            ).pack(pady=10)
-
-        
-        # =========================
-        # MÓDULO 1
-        # =========================
-        if is_admin or "abrir_extrator" in permissoes:
-            self.criar_card_modulo(
-                card,
-                "1. Extrator TXT → Excel",
-                "Extraia informações fiscais de arquivos TXT para planilhas Excel",
-                self.abrir_extrator,
-                icone="txt.png"
-            )
-
-        # =========================
-        # MÓDULO 2
-        # =========================
-        if is_admin or "abrir_comparador" in permissoes:
-            self.criar_card_modulo(
-                card,
-                "2. Comparador SEFAZ x Sistema",
-                "Compare e identifique divergências entre as notas da SEFAZ e do Sistema",
-                self.abrir_comparador,
-                icone="comparador.png"
-            )
-
-        # =========================
-        # MÓDULO 3
-        # =========================
-        if is_admin or "abrir_triagem" in permissoes:
-            self.criar_card_modulo(
-                card,
-                "3. Triagem SPED → PDFs",
-                "Extraia e mescle automaticamente PDFs de NF-e e CT-e",
-                self.abrir_triagem,
-                icone="sped.png"
-            )
-
-        # =========================
-        # MÓDULO 4
-        # =========================
-        if is_admin or "abrir_extrator_pdf" in permissoes:
-            self.criar_card_modulo(
-                card,
-                "4. Extrator PDF → Excel",
-                "Extraia informações fiscais de arquivos PDF para planilhas Excel",
-                self.abrir_extrator_pdf,
-                icone="pdf.png"
-            )
-        
-
-        # Rodapé
-        footer = ttk.Frame(main_frame, style='Main.TFrame')
-        footer.pack(fill="x", pady=(20, 0))
-        
-        ttk.Label(
-            footer,
-            text="v1.0 • Sistema Fiscal MT - Desenvolvido e licenciado por Miquéias Teles",
-            font=('Segoe UI', 8),
-            background=CORES['bg_main'],
-            foreground=CORES['text_light']
-        ).pack()
-
-    def criar_card_modulo(self, parent, titulo, descricao, comando, icone=None):
-        card = tk.Frame(
-            parent,
-            bg='white',
-            bd=1,
-            relief='solid',
-            cursor='hand2',
-            padx=20,
-            pady=15
-        )
-        card.pack(fill="x", pady=(0, 12))
-
-        topo = tk.Frame(card, bg='white')
-        topo.pack(fill="x")
-
-        # ==========================
-        # ÍCONE DO MÓDULO
-        # ==========================
-        if icone:
-            caminho_icone = resource_path(f"Icones/{icone}")
-            img = Image.open(caminho_icone)
-            img = img.resize((42, 42), Image.LANCZOS)
-            icone_img = ImageTk.PhotoImage(img)
-
-            lbl_icon = tk.Label(topo, image=icone_img, bg='white')
-            lbl_icon.image = icone_img  # ← MUITO IMPORTANTE
-            lbl_icon.pack(side="left", padx=(0, 15))
-
-        texto_frame = tk.Frame(topo, bg='white')
-        texto_frame.pack(side="left", fill="x", expand=True)
-
-        titulo_lbl = tk.Label(
-            texto_frame,
-            text=titulo,
-            font=('Segoe UI', 11, 'bold'),
-            bg='white',
-            fg=CORES['text_dark'],
-            anchor='w'
-        )
-        titulo_lbl.pack(fill="x")
-
-        desc_lbl = tk.Label(
-            texto_frame,
-            text=descricao,
-            font=('Segoe UI', 9),
-            bg='white',
-            fg=CORES['text_light'],
-            anchor='w',
-            wraplength=520
-        )
-        desc_lbl.pack(fill="x", pady=(5, 0))
-
-        # ==========================
-        # HOVER / CLICK
-        # ==========================
-        def on_enter(e):
-            card.config(
-                bg=CORES['bg_card_hover'],
-                highlightbackground=CORES['primary'],
-                highlightthickness=2
-            )
-            topo.config(bg=CORES['bg_card_hover'])
-            texto_frame.config(bg=CORES['bg_card_hover'])
-            titulo_lbl.config(bg=CORES['bg_card_hover'])
-            desc_lbl.config(bg=CORES['bg_card_hover'])
-            if icone:
-                lbl_icon.config(bg=CORES['bg_card_hover'])
-
-        def on_leave(e):
-            card.config(bg='white', highlightthickness=0)
-            topo.config(bg='white')
-            texto_frame.config(bg='white')
-            titulo_lbl.config(bg='white')
-            desc_lbl.config(bg='white')
-            if icone:
-                lbl_icon.config(bg='white')
-
-        def on_click(e):
-            comando()
-
-        for widget in (card, topo, titulo_lbl, desc_lbl):
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
-            widget.bind("<Button-1>", on_click)
-
-        if icone:
-            lbl_icon.bind("<Enter>", on_enter)
-            lbl_icon.bind("<Leave>", on_leave)
-            lbl_icon.bind("<Button-1>", on_click)
-
-    def sair(self):
-        resposta = messagebox.askyesno(
-            "Sair do sistema",
-            "Deseja sair e voltar para a tela de login?"
-        )
-        if not resposta:
-            return
-
-        self.root.destroy()
-
-        root = tk.Tk()
-        TelaLogin(root)
-        root.mainloop()
-
+            messagebox.showerror("Erro ao processar", f"Ocorreu um erro durante a extração:\n\n{str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
