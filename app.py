@@ -12,6 +12,8 @@ import pdfplumber
 import sqlite3
 import hashlib
 
+VERSAO_ATUAL = "1.0"
+CAMINHO_EXE_ATUALIZADO = r"T:\MTSistem\app\MTSistem.exe"
 
 DB_DIR = r"T:\MTSistem\db"
 DB_PATH = os.path.join(DB_DIR, "sistemafiscal.db")
@@ -23,6 +25,7 @@ MODULOS = {
     "abrir_triagem": "Triagem SPED → PDFs",
     "abrir_extrator_pdf": "Extrator PDF → Excel"
 }
+
 
 def garantir_banco():
     if not os.path.exists(DB_DIR):
@@ -37,6 +40,7 @@ class UsuarioDAO:
         self.conn = garantir_banco()
         self.criar_tabelas()
         self.criar_admin_inicial()
+        self.criar_configuracoes_padrao()
 
     # ==========================
     # TABELAS
@@ -62,7 +66,67 @@ class UsuarioDAO:
             )
         """)
 
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS configuracoes (
+                chave TEXT PRIMARY KEY,
+                valor TEXT NOT NULL
+            )
+        """)
+
+
         self.conn.commit()
+
+    # ==========================
+    # Configurações padrão
+    # ==========================
+    def criar_configuracoes_padrao(self):
+        configs = {
+            "versao_atual": VERSAO_ATUAL,
+            "atualizacao_liberada": "NAO",
+            "sistema_bloqueado": "NAO",
+            "mensagem_update": "Atualização disponível",
+            "exe_atualizacao": CAMINHO_EXE_ATUALIZADO
+        }
+
+        cur = self.conn.cursor()
+
+        for chave, valor in configs.items():
+            cur.execute("""
+                INSERT INTO configuracoes (chave, valor)
+                VALUES (?, ?)
+                ON CONFLICT(chave) DO NOTHING
+            """, (chave, valor))
+
+        self.conn.commit()
+
+
+    def get_config(self, chave, default=None):
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT valor FROM configuracoes WHERE chave=?",
+            (chave,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else default
+
+    
+    def set_config(self, chave, valor):
+        cur = self.conn.cursor()
+        cur.execute("""
+            INSERT INTO configuracoes (chave, valor)
+            VALUES (?, ?)
+            ON CONFLICT(chave)
+            DO UPDATE SET valor = excluded.valor
+        """, (chave, str(valor)))
+        self.conn.commit()
+
+    def get_versao_atual_sistema(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT valor FROM configuracoes WHERE chave = 'versao_atual'"
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
 
     # ==========================
     # HASH
@@ -112,11 +176,34 @@ class UsuarioDAO:
     # ==========================
     def autenticar(self, nome, senha):
         cur = self.conn.cursor()
+
+        # 1️⃣ Valida usuário e senha
         cur.execute(
             "SELECT id, admin FROM usuarios WHERE nome=? AND senha=?",
             (nome, self.hash_senha(senha))
         )
-        return cur.fetchone()
+        usuario = cur.fetchone()
+
+        if not usuario:
+            return None  # usuário ou senha inválidos
+
+        usuario_id, is_admin = usuario
+
+        # 2️⃣ Verifica se o sistema está bloqueado
+        cur.execute(
+            "SELECT valor FROM configuracoes WHERE chave='sistema_bloqueado'"
+        )
+        row = cur.fetchone()
+
+        sistema_bloqueado = row and row[0] == "SIM"
+
+        # 3️⃣ Se bloqueado e NÃO for admin → bloqueia acesso
+        if sistema_bloqueado and not is_admin:
+            return "BLOQUEADO"
+
+        # 4️⃣ Login permitido
+        return usuario_id, is_admin
+
 
 
     def listar_usuarios(self):
@@ -172,11 +259,11 @@ class UsuarioDAO:
         return cur.fetchone()
 
 
-    def atualizar_senha(self, usuario_id, nova_senha):
+    def atualizar_usuario(self, usuario_id, nome, admin):
         cur = self.conn.cursor()
         cur.execute(
-            "UPDATE usuarios SET senha=? WHERE id=?",
-            (self.hash_senha(nova_senha), usuario_id)
+            "UPDATE usuarios SET nome=?, admin=? WHERE id=?",
+            (nome, admin, usuario_id)
         )
         self.conn.commit()
 
@@ -186,7 +273,7 @@ class UsuarioDAO:
         cur = self.conn.cursor()
         cur.execute(
             "UPDATE usuarios SET senha=? WHERE id=?",
-            (senha, usuario_id)
+            (self.hash_senha(senha), usuario_id)
         )
         self.conn.commit()
 
@@ -197,16 +284,25 @@ class UsuarioDAO:
         cur.execute("DELETE FROM usuarios WHERE id=?", (usuario_id,))
         self.conn.commit()
     
+    def usuario_admin(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute("SELECT admin FROM usuarios WHERE id=?", (usuario_id,))
+        row = cur.fetchone()
+        return bool(row and row[0])
+
     
+
 
 # =====================================================
 # Tela de Login
 # =====================================================
 
 class TelaLogin:
-    def __init__(self, root):
+    def __init__(self, root, versao_remota):
         self.root = root
+        self.versao_remota = versao_remota
         self.dao = UsuarioDAO()
+
 
         self.root.title("MTSistem - Login")
         self.root.configure(bg=CORES['bg_main'])
@@ -310,13 +406,39 @@ class TelaLogin:
             return
 
         auth = self.dao.autenticar(nome, senha)
-        if auth:
-            self.root.destroy()
-            root = tk.Tk()
-            SistemaFiscal(root, usuario_id=usuario_id, usuario_nome=nome)
-            root.mainloop()
-        else:
-            messagebox.showerror("Erro", "Senha incorreta", parent=self.root)
+
+        # ❌ Usuário ou senha inválidos
+        if auth is None:
+            messagebox.showerror(
+                "Erro",
+                "Usuário ou senha inválidos.",
+                parent=self.root
+            )
+            return
+
+        # 🔒 Sistema bloqueado
+        if auth == "BLOQUEADO":
+            messagebox.showwarning(
+                "Sistema bloqueado",
+                "O acesso está temporariamente bloqueado.\n\n"
+                "Consulte o administrador.",
+                parent=self.root
+            )
+            return
+
+        # ✅ Login permitido
+        usuario_id, is_admin = auth
+
+        self.root.destroy()
+        root = tk.Tk()
+        SistemaFiscal(
+            root,
+            usuario_id=usuario_id,
+            usuario_nome=nome,
+            versao_remota=self.versao_remota
+        )
+        root.mainloop()
+
 
 
 # =====================================================
@@ -536,6 +658,61 @@ def pasta_dados_app(nome_app="MTSistem"):
     base = os.path.join(os.path.expanduser("~"), "Documents", nome_app)
     os.makedirs(base, exist_ok=True)
     return base
+
+def verificar_versao_no_startup():
+    dao = UsuarioDAO()
+
+    versao_remota = dao.get_config("versao_atual")
+
+    if not versao_remota:
+        messagebox.showerror(
+            "Erro crítico",
+            "Versão do sistema não configurada no banco de dados.\n\n"
+            "O sistema não pode ser iniciado."
+        )
+        sys.exit()
+
+    return versao_remota
+
+
+def atualizacao_liberada(dao: UsuarioDAO):
+    try:
+        return dao.get_config("atualizacao_liberada") == "SIM"
+    except Exception:
+        return False
+    
+
+def sistema_esta_desatualizado(dao):
+    versao_banco = dao.get_config("versao_atual")
+    return str(versao_banco).strip() != str(VERSAO_ATUAL).strip()
+
+
+
+def executar_atualizacao(dao: UsuarioDAO):
+    caminho_exe = dao.get_config("exe_atualizacao")
+
+    if not caminho_exe or not os.path.exists(caminho_exe):
+        messagebox.showerror(
+            "Atualização indisponível",
+            "Arquivo de atualização não encontrado.\n\n"
+            "Entre em contato com o administrador."
+        )
+        return
+
+    try:
+        messagebox.showinfo(
+            "Atualização",
+            "O sistema será fechado para aplicar a atualização."
+        )
+
+        os.startfile(caminho_exe)
+        sys.exit()
+
+    except OSError:
+        messagebox.showwarning(
+            "Atualização cancelada",
+            "A atualização foi cancelada pelo usuário."
+        )
 
 
 # =====================================================
@@ -1445,11 +1622,19 @@ class ComparadorNotasEmbed:
 # Extração Informações PDF → Excel
 # =====================================================
 class SistemaFiscal:
-    def __init__(self, root, usuario_id, usuario_nome):
+    def __init__(self, root, usuario_id, usuario_nome, versao_remota):
         self.root = root
         self.usuario_id = usuario_id
         self.usuario_nome = usuario_nome
         self.dao = UsuarioDAO()
+        self.versao_remota = versao_remota
+        self.desatualizado = sistema_esta_desatualizado(self.dao)
+        self.atualizacao_liberada = atualizacao_liberada(self.dao)
+        self.usuario_admin = self.dao.usuario_admin(self.usuario_id)
+        self.mensagem_update = self.dao.get_config(
+            "mensagem_update",
+            "⚠️ Sistema desatualizado"
+        )
         root.title("MT Sistem - Sistema Fiscal")
         
         # Janela maximizada
@@ -1468,6 +1653,7 @@ class SistemaFiscal:
         self.content_area = None
         
         self.criar_interface()
+    
 
     def abrir_extrator(self):
         self.limpar_content_area()
@@ -1600,10 +1786,20 @@ class SistemaFiscal:
         if is_admin:
             self.criar_menu_item(
                 menu_frame,
-                "⚙️ Usuários",
+                "👥 Usuários",
                 lambda: TelaUsuariosAdmin(self.root),
                 is_admin_btn=True,
             )
+
+        if is_admin:
+            self.criar_menu_item(
+                menu_frame,
+                "⚙️ Configurações do Sistema",
+                lambda: TelaConfiguracoesSistema(self.root),
+                is_admin_btn=True,
+            )    
+
+
 
         # Rodapé do sidebar
         footer_sidebar = tk.Frame(sidebar, bg=CORES['primary'])
@@ -1711,27 +1907,50 @@ class SistemaFiscal:
             lbl_icon.bind("<Leave>", on_leave)
             lbl_icon.bind("<Button-1>", on_click)
 
+    
     def mostrar_home(self):
-        """Tela inicial com boas-vindas"""
         home_frame = ttk.Frame(self.content_area, style='Main.TFrame')
         home_frame.pack(fill="both", expand=True, padx=50, pady=50)
 
-        # Cabeçalho
         ttk.Label(
             home_frame,
             text="Bem-vindo ao Sistema Fiscal",
-            font=('Segoe UI', 24, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
+            font=('Segoe UI', 24, 'bold')
         ).pack(pady=(0, 10))
 
         ttk.Label(
             home_frame,
             text=f"Olá, {self.usuario_nome}! Selecione um módulo no menu lateral para começar.",
-            font=('Segoe UI', 11),
-            background=CORES['bg_main'],
-            foreground=CORES['text_light']
+            font=('Segoe UI', 11)
         ).pack(pady=(0, 40))
+
+        # =========================
+        # AVISO DE ATUALIZAÇÃO
+        # =========================
+        if self.desatualizado:
+            ttk.Label(
+                home_frame,
+                text=self.mensagem_update,
+                foreground="#C0392B",
+                font=('Segoe UI', 11, 'bold'),
+                wraplength=600,     
+                justify="center"
+            ).pack(pady=(20, 10))
+
+            btn_atualizar = ttk.Button(
+                home_frame,
+                text="Atualizar sistema",
+                command=lambda: executar_atualizacao(self.dao)
+            )
+
+            if self.atualizacao_liberada:
+                btn_atualizar.state(["!disabled"])
+            else:
+                btn_atualizar.state(["disabled"])
+
+            btn_atualizar.pack(pady=5)
+
+
 
         # Cards informativos
         cards_container = ttk.Frame(home_frame, style='Main.TFrame')
@@ -1826,7 +2045,7 @@ class SistemaFiscal:
         self.root.destroy()
 
         root = tk.Tk()
-        TelaLogin(root)
+        TelaLogin(root, versao_remota=self.versao_remota)
         root.mainloop()
 
 
@@ -2008,11 +2227,15 @@ class ExtratorFiscalPDFAppEmbed:
                             if data:
                                 nota_atual["Data de Emissao"] = data.group()
 
-                        if any(u in linha for u in [" Kg ", " SC ", " UN ", " TON "]):
-                            qtd_match = re.search(r"\b\d{1,3}(?:\.\d{3})*,\d{2}\b", linha)
-                            if qtd_match:
-                                qtd = float(qtd_match.group().replace(".", "").replace(",", "."))
+                        # Linha de item começa com código numérico
+                        if re.match(r"^\d{3,}", linha):
+                            numeros = re.findall(r"\d{1,3}(?:\.\d{3})*,\d{2}", linha)
+
+                            if numeros:
+                                qtd = float(numeros[0].replace(".", "").replace(",", "."))
                                 nota_atual["Quantidade"] += qtd
+
+
 
                         pedido_match = re.search(r"\b(\d{6})/\d{2}\b", linha)
                         if pedido_match and nota_atual["Pedido"] is None:
@@ -2054,7 +2277,128 @@ class ExtratorFiscalPDFAppEmbed:
         except Exception as e:
             messagebox.showerror("Erro ao processar", f"Ocorreu um erro durante a extração:\n\n{str(e)}")
 
+# =====================================================
+# TELA DE CONFIGURAÇÕES DO SISTEMA (ADMIN)
+# =====================================================
+
+class TelaConfiguracoesSistema:
+    def __init__(self, parent):
+        self.dao = UsuarioDAO()
+
+        self.janela = tk.Toplevel(parent)
+        self.janela.title("Configurações do Sistema")
+        self.janela.geometry("720x600")
+        self.janela.configure(bg=CORES['bg_main'])
+
+        caminho_icone = resource_path("Icones/logo.ico")
+        self.janela.iconbitmap(caminho_icone)
+
+        self.centralizar()
+        self.criar_interface()
+
+    def centralizar(self):
+        self.janela.update_idletasks()
+        w = self.janela.winfo_width()
+        h = self.janela.winfo_height()
+        x = (self.janela.winfo_screenwidth() - w) // 2
+        y = (self.janela.winfo_screenheight() - h) // 2
+        self.janela.geometry(f"{w}x{h}+{x}+{y}")
+
+    def criar_interface(self):
+        container = ttk.Frame(self.janela, padding=30, style="Main.TFrame")
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(
+            container,
+            text="Configurações do Sistema",
+            font=('Segoe UI', 18, 'bold')
+        ).pack(anchor="w", pady=(0, 25))
+
+        # ==================================================
+        # CARD – CONTROLE DE ATUALIZAÇÃO
+        # ==================================================
+        card = ttk.Frame(container, padding=20, style="Card.TFrame")
+        card.pack(fill="x")
+
+        ttk.Label(
+            card,
+            text="Atualização e Controle do Sistema",
+            font=('Segoe UI', 14, 'bold')
+        ).pack(anchor="w", pady=(0, 15))
+
+        # -------- Versão atual no servidor --------
+        versao_atual = self.dao.get_config("versao_atual", VERSAO_ATUAL)
+
+        ttk.Label(card, text="Versão liberada no servidor").pack(anchor="w")
+        self.entry_versao = ttk.Entry(card)
+        self.entry_versao.insert(0, versao_atual)
+        self.entry_versao.pack(fill="x", pady=(0, 10))
+
+        # -------- Caminho do EXE --------
+        exe = self.dao.get_config("exe_atualizacao", "")
+        ttk.Label(card, text="Executável de atualização").pack(anchor="w")
+        self.entry_exe = ttk.Entry(card)
+        self.entry_exe.insert(0, exe)
+        self.entry_exe.pack(fill="x", pady=(0, 10))
+
+        # -------- Mensagem --------
+        mensagem = self.dao.get_config("mensagem_update", "")
+        ttk.Label(card, text="Mensagem para os usuários").pack(anchor="w")
+        self.txt_mensagem = tk.Text(card, height=4)
+        self.txt_mensagem.insert("1.0", mensagem)
+        self.txt_mensagem.pack(fill="x", pady=(0, 10))
+
+        # -------- Flags --------
+        liberar = self.dao.get_config("atualizacao_liberada", "NAO")
+        bloqueado = self.dao.get_config("sistema_bloqueado", "NAO")
+
+        self.var_liberar = tk.IntVar(value=1 if liberar == "SIM" else 0)
+        self.var_bloquear = tk.IntVar(value=1 if bloqueado == "SIM" else 0)
+
+        ttk.Checkbutton(
+            card,
+            text="Liberar atualização para usuários",
+            variable=self.var_liberar
+        ).pack(anchor="w")
+
+        ttk.Checkbutton(
+            card,
+            text="Bloquear acesso ao sistema (exceto admin)",
+            variable=self.var_bloquear
+        ).pack(anchor="w", pady=(5, 15))
+
+        ttk.Button(
+            card,
+            text="Salvar configurações",
+            style="Primary.TButton",
+            command=self.salvar
+        ).pack(anchor="e")
+
+    def salvar(self):
+        self.dao.set_config("versao_atual", self.entry_versao.get().strip())
+        self.dao.set_config("exe_atualizacao", self.entry_exe.get().strip())
+        self.dao.set_config(
+            "mensagem_update",
+            self.txt_mensagem.get("1.0", "end").strip()
+        )
+        self.dao.set_config(
+            "atualizacao_liberada",
+            "SIM" if self.var_liberar.get() else "NAO"
+        )
+        self.dao.set_config(
+            "sistema_bloqueado",
+            "SIM" if self.var_bloquear.get() else "NAO"
+        )
+
+        messagebox.showinfo(
+            "Sucesso",
+            "Configurações salvas com sucesso."
+        )
+
+
+
 if __name__ == "__main__":
+    versao_remota = verificar_versao_no_startup()
     root = tk.Tk()
-    TelaLogin(root)
+    TelaLogin(root, versao_remota)
     root.mainloop()
