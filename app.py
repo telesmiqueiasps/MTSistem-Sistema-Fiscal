@@ -472,19 +472,21 @@ class TelaUsuariosAdmin:
         self.janela.geometry(f"{width}x{height}+{x}+{y}")    
 
     def criar_interface(self):
-        container = ttk.Frame(self.janela, padding=20)
+        container = ttk.Frame(self.janela, padding=20, style="Main.TFrame")
         container.pack(fill="both", expand=True)
 
         # ======================
         # LADO ESQUERDO – LISTA
         # ======================
-        left = ttk.Frame(container)
+        left = ttk.Frame(container, style="Card.TFrame")
         left.pack(side="left", fill="y", padx=(0, 20))
 
         ttk.Label(
             left,
             text="Usuários",
-            font=('Segoe UI', 14, 'bold')
+            font=('Segoe UI', 14, 'bold'),
+            foreground=CORES['primary'],
+            background=CORES['bg_card']
         ).pack(anchor="w")
 
         self.lista = tk.Listbox(left, width=30, height=25)
@@ -494,35 +496,39 @@ class TelaUsuariosAdmin:
         ttk.Button(
             left,
             text="Novo Usuário",
+            style='Add.TButton',
             command=self.novo_usuario
         ).pack(fill="x", pady=(5, 0))
 
         ttk.Button(
             left,
             text="Excluir Usuário",
+            style='Danger.TButton',
             command=self.excluir_usuario
         ).pack(fill="x", pady=5)
 
         # ======================
         # LADO DIREITO – FORM
         # ======================
-        right = ttk.Frame(container)
+        right = ttk.Frame(container, style="Card.TFrame")
         right.pack(side="left", fill="both", expand=True)
 
         ttk.Label(
             right,
             text="Dados do Usuário",
-            font=('Segoe UI', 14, 'bold')
+            font=('Segoe UI', 14, 'bold'),
+            foreground=CORES['primary'],
+            background=CORES['bg_card']
         ).pack(anchor="w")
 
-        form = ttk.Frame(right)
+        form = ttk.Frame(right, style="Card.TFrame")
         form.pack(fill="x", pady=10)
 
-        ttk.Label(form, text="Nome").grid(row=0, column=0, sticky="w")
+        ttk.Label(form, text="Nome", background=CORES['bg_card']).grid(row=0, column=0, sticky="w")
         self.entry_nome = ttk.Entry(form)
         self.entry_nome.grid(row=0, column=1, sticky="ew", padx=10)
 
-        ttk.Label(form, text="Nova senha").grid(row=1, column=0, sticky="w")
+        ttk.Label(form, text="Nova senha", background=CORES['bg_card']).grid(row=1, column=0, sticky="w")
         self.entry_senha = ttk.Entry(form, show="*")
         self.entry_senha.grid(row=1, column=1, sticky="ew", padx=10)
 
@@ -530,6 +536,7 @@ class TelaUsuariosAdmin:
         ttk.Checkbutton(
             form,
             text="Administrador",
+            style="Custom.TCheckbutton",
             variable=self.var_admin
         ).grid(row=2, column=1, sticky="w", pady=5)
 
@@ -541,10 +548,12 @@ class TelaUsuariosAdmin:
         ttk.Label(
             right,
             text="Permissões",
-            font=('Segoe UI', 12, 'bold')
+            font=('Segoe UI', 12, 'bold'),
+            foreground=CORES['primary'],
+            background=CORES['bg_card']
         ).pack(anchor="w", pady=(15, 5))
 
-        perms = ttk.Frame(right)
+        perms = ttk.Frame(right, style="Card.TFrame")
         perms.pack(anchor="w")
 
         for modulo, label in MODULOS.items():
@@ -553,12 +562,14 @@ class TelaUsuariosAdmin:
             ttk.Checkbutton(
                 perms,
                 text=label,
+                style="Custom.TCheckbutton",
                 variable=var
-            ).pack(anchor="w")
+            ).pack(anchor="w", pady=(15, 2))
 
         ttk.Button(
             right,
             text="Salvar alterações",
+            style='Primary.TButton',
             command=self.salvar
         ).pack(pady=20)
 
@@ -725,7 +736,9 @@ CORES = {
     'primary_hover': '#1d4ed8',
     'secondary': '#64748b',
     'success': '#10b981',
+    'success_hover': "#057e56",
     'danger': '#ef4444',
+    'danger_hover': '#dc2626',
     'bg_main': '#f8fafc',
     'bg_card': '#ffffff',
     'text_dark': '#1e293b',
@@ -750,6 +763,34 @@ def configurar_estilo():
     )
     style.map('Primary.TButton',
         background=[('active', CORES['primary_hover'])]
+    )
+
+    # Botões verde (Adicionar)
+    style.configure(
+        'Add.TButton',
+        background=CORES['success'],
+        foreground='white',
+        borderwidth=0,
+        focuscolor='none',
+        font=('Segoe UI', 10),
+        padding=(20, 10)
+    )
+    style.map('Add.TButton',
+        background=[('active', CORES['success_hover'])]
+    )
+
+    # Botões vermelho(excluir)
+    style.configure(
+        'Danger.TButton',
+        background=CORES['danger'],
+        foreground='white',
+        borderwidth=0,
+        focuscolor='none',
+        font=('Segoe UI', 10),
+        padding=(20, 10)
+    )
+    style.map('Danger.TButton',
+        background=[('active', CORES['danger_hover'])]
     )
     
     # Botões secundários
@@ -777,6 +818,26 @@ def configurar_estilo():
         background=[('active', CORES['primary_hover'])]
     )
     
+    # Checkbuttons
+    style.configure(
+        "Custom.TCheckbutton",
+        background=CORES['bg_card'],
+        foreground=CORES['text_dark'],
+        font=('Segoe UI', 10),
+        padding=5
+    )
+    style.map(
+        "Custom.TCheckbutton",
+        background=[
+            ('active', CORES['bg_card_hover']),
+            ('selected', CORES['bg_card'])
+        ],
+        foreground=[
+            ('disabled', CORES['text_light']),
+            ('selected', CORES['text_dark'])
+        ]
+    )
+
     # Labels
     style.configure(
         'Title.TLabel',
@@ -1786,16 +1847,18 @@ class SistemaFiscal:
         if is_admin:
             self.criar_menu_item(
                 menu_frame,
-                "👥 Usuários",
+                "Usuários",
                 lambda: TelaUsuariosAdmin(self.root),
+                icone="usuarios.png",
                 is_admin_btn=True,
             )
 
         if is_admin:
             self.criar_menu_item(
                 menu_frame,
-                "⚙️ Configurações do Sistema",
+                "Configurações do Sistema",
                 lambda: TelaConfiguracoesSistema(self.root),
+                icone="config.png",
                 is_admin_btn=True,
             )    
 
@@ -1858,7 +1921,7 @@ class SistemaFiscal:
         inner.pack(fill="x", padx=15, pady=10)
 
         # Ícone
-        if icone and not is_admin_btn:
+        if icone:
             caminho_icone = resource_path(f"Icones/{icone}")
             img = Image.open(caminho_icone)
             img = img.resize((24, 24), Image.LANCZOS)
@@ -1884,14 +1947,14 @@ class SistemaFiscal:
             btn.config(bg='white')
             inner.config(bg='white')
             lbl_text.config(bg='white', fg=CORES['primary'])
-            if icone and not is_admin_btn:
-                lbl_icon.config(bg='white')
+            if icone:
+                lbl_icon.config(bg=CORES['primary'])
 
         def on_leave(e):
             btn.config(bg=CORES['primary'])
             inner.config(bg=CORES['primary'])
             lbl_text.config(bg=CORES['primary'], fg='white')
-            if icone and not is_admin_btn:
+            if icone:
                 lbl_icon.config(bg=CORES['primary'])
 
         def on_click(e):
@@ -1902,7 +1965,7 @@ class SistemaFiscal:
             widget.bind("<Leave>", on_leave)
             widget.bind("<Button-1>", on_click)
 
-        if icone and not is_admin_btn:
+        if icone:
             lbl_icon.bind("<Enter>", on_enter)
             lbl_icon.bind("<Leave>", on_leave)
             lbl_icon.bind("<Button-1>", on_click)
@@ -1915,14 +1978,38 @@ class SistemaFiscal:
         ttk.Label(
             home_frame,
             text="Bem-vindo ao Sistema Fiscal",
-            font=('Segoe UI', 24, 'bold')
+            font=('Segoe UI', 24, 'bold'),
+            foreground=CORES['text_dark'],
+            background=CORES['bg_main']
         ).pack(pady=(0, 10))
 
+        linha = ttk.Frame(home_frame, style='Main.TFrame')
+        linha.pack(pady=(0, 40))
+
         ttk.Label(
-            home_frame,
-            text=f"Olá, {self.usuario_nome}! Selecione um módulo no menu lateral para começar.",
-            font=('Segoe UI', 11)
-        ).pack(pady=(0, 40))
+            linha,
+            text="Olá, ",
+            font=('Segoe UI', 11),
+            foreground=CORES['text_dark'],
+            background=CORES['bg_main']
+        ).pack(side="left")
+
+        ttk.Label(
+            linha,
+            text=self.usuario_nome,
+            font=('Segoe UI', 11, 'bold'),
+            foreground=CORES['primary'],  # cor diferente só no nome
+            background=CORES['bg_main']
+        ).pack(side="left")
+
+        ttk.Label(
+            linha,
+            text="! Selecione um módulo no menu lateral para começar.",
+            font=('Segoe UI', 11),
+            foreground=CORES['text_dark'],
+            background=CORES['bg_main']
+        ).pack(side="left")
+
 
         # =========================
         # AVISO DE ATUALIZAÇÃO
@@ -2308,11 +2395,41 @@ class TelaConfiguracoesSistema:
         container = ttk.Frame(self.janela, padding=30, style="Main.TFrame")
         container.pack(fill="both", expand=True)
 
+        # Header
+        header_frame = ttk.Frame(container, style='Main.TFrame')
+        header_frame.pack(fill="x", pady=(0, 30))
+
+        header_container = ttk.Frame(header_frame, style='Main.TFrame')
+        header_container.pack(fill="x")
+
+        # Ícone e título
+        left_header = ttk.Frame(header_container, style='Main.TFrame')
+        left_header.pack(side="left")
+
+        caminho_icone = resource_path("Icones/config_azul.png")
+        img = Image.open(caminho_icone)
+        img = img.resize((32, 32), Image.LANCZOS)
+        self.icon_header = ImageTk.PhotoImage(img)  # manter referência!
+
+
         ttk.Label(
-            container,
+            left_header,
+            image=self.icon_header,
+            background=CORES['bg_main']
+        ).pack(side="left", padx=(0, 15))
+
+        title_frame = ttk.Frame(left_header, style='Main.TFrame')
+        title_frame.pack(side="left")
+
+        ttk.Label(
+            title_frame,
             text="Configurações do Sistema",
-            font=('Segoe UI', 18, 'bold')
-        ).pack(anchor="w", pady=(0, 25))
+            font=('Segoe UI', 18, 'bold'),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
+    
 
         # ==================================================
         # CARD – CONTROLE DE ATUALIZAÇÃO
@@ -2323,27 +2440,29 @@ class TelaConfiguracoesSistema:
         ttk.Label(
             card,
             text="Atualização e Controle do Sistema",
-            font=('Segoe UI', 14, 'bold')
+            font=('Segoe UI', 14, 'bold'),
+            foreground=CORES['primary'],
+            background=CORES['bg_card']
         ).pack(anchor="w", pady=(0, 15))
 
         # -------- Versão atual no servidor --------
         versao_atual = self.dao.get_config("versao_atual", VERSAO_ATUAL)
 
-        ttk.Label(card, text="Versão liberada no servidor").pack(anchor="w")
+        ttk.Label(card, text="Versão liberada no servidor", background=CORES['bg_card']).pack(anchor="w")
         self.entry_versao = ttk.Entry(card)
         self.entry_versao.insert(0, versao_atual)
         self.entry_versao.pack(fill="x", pady=(0, 10))
 
         # -------- Caminho do EXE --------
         exe = self.dao.get_config("exe_atualizacao", "")
-        ttk.Label(card, text="Executável de atualização").pack(anchor="w")
+        ttk.Label(card, text="Executável de atualização", background=CORES['bg_card']).pack(anchor="w")
         self.entry_exe = ttk.Entry(card)
         self.entry_exe.insert(0, exe)
         self.entry_exe.pack(fill="x", pady=(0, 10))
 
         # -------- Mensagem --------
         mensagem = self.dao.get_config("mensagem_update", "")
-        ttk.Label(card, text="Mensagem para os usuários").pack(anchor="w")
+        ttk.Label(card, text="Mensagem para os usuários", background=CORES['bg_card']).pack(anchor="w")
         self.txt_mensagem = tk.Text(card, height=4)
         self.txt_mensagem.insert("1.0", mensagem)
         self.txt_mensagem.pack(fill="x", pady=(0, 10))
@@ -2358,12 +2477,14 @@ class TelaConfiguracoesSistema:
         ttk.Checkbutton(
             card,
             text="Liberar atualização para usuários",
+            style="Custom.TCheckbutton",
             variable=self.var_liberar
         ).pack(anchor="w")
 
         ttk.Checkbutton(
             card,
             text="Bloquear acesso ao sistema (exceto admin)",
+            style="Custom.TCheckbutton",
             variable=self.var_bloquear
         ).pack(anchor="w", pady=(5, 15))
 
