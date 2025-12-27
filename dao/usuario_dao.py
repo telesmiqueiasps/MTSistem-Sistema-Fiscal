@@ -1,16 +1,6 @@
 import hashlib
 from utils.constantes import VERSAO_ATUAL, CAMINHO_EXE_ATUALIZADO
-import os
-import sqlite3
-from utils.constantes import DB_DIR, DB_PATH
-
-
-def garantir_banco():
-    if not os.path.exists(DB_DIR):
-        os.makedirs(DB_DIR, exist_ok=True)
-
-    conn = sqlite3.connect(DB_PATH)
-    return conn
+from database.conexao import garantir_banco
 
 class UsuarioDAO:
     def __init__(self):
@@ -47,6 +37,50 @@ class UsuarioDAO:
             CREATE TABLE IF NOT EXISTS configuracoes (
                 chave TEXT PRIMARY KEY,
                 valor TEXT NOT NULL
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS diaristas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cpf TEXT NOT NULL UNIQUE
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS centros_custo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                centro TEXT NOT NULL UNIQUE
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS valores_diaria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                valor_padrao REAL NOT NULL,
+                valor_diferente REAL,
+                valor_hora_extra REAL
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS diarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_diaria TEXT NOT NULL,
+                diarista TEXT NOT NULL,
+                cpf TEXT NOT NULL,
+                qtd_diarias INTEGER DEFAULT 0,
+                tipo_valor TEXT NOT NULL,
+                vlr_diaria_hora REAL DEFAULT 0,
+                vlr_horas_extras REAL DEFAULT 0,
+                qtd_horas REAL DEFAULT 0,
+                vlr_unitario REAL NOT NULL,
+                centro_custo TEXT NOT NULL,
+                vlr_total REAL NOT NULL,
+                descricao TEXT,
+                data_emissao TEXT NOT NULL,
+                caminho_arquivo TEXT
             )
         """)
 

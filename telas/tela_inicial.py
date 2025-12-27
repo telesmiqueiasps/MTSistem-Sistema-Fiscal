@@ -63,6 +63,17 @@ class SistemaFiscal:
         self.limpar_content_area()
         ExtratorFiscalPDFAppEmbed(self.content_area, self)
 
+    def abrir_diaristas(self):
+        from telas.tela_diaristas import DiaristasEmbed
+        self.limpar_content_area()
+        DiaristasEmbed(self.content_area, self)
+
+    def abrir_centros_custo(self):
+        from telas.tela_centros_custo import CentrosCustoEmbed
+        self.limpar_content_area()
+        CentrosCustoEmbed(self.content_area, self)
+           
+
     def voltar_home(self):
         self.limpar_content_area()
         self.mostrar_home()
@@ -174,6 +185,23 @@ class SistemaFiscal:
                 icone="pdf.png"
             )
 
+        if is_admin or "abrir_diaristas" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Diaristas",
+                self.abrir_diaristas,
+                icone="diarista.png"
+            )
+
+        if is_admin or "abrir_centros_custo" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Centros de Custo",
+                self.abrir_centros_custo,
+                icone="centro_custo.png"
+            )
+
+            
         # Separador
         tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=10, padx=20)
 

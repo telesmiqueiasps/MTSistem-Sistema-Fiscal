@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from tkinter import messagebox, ttk
 from dao.usuario_dao import UsuarioDAO
 from utils.constantes import CORES, VERSAO_ATUAL
@@ -188,3 +189,20 @@ def configurar_estilo():
     # Frames
     style.configure('Card.TFrame', background=CORES['bg_card'], relief='flat')
     style.configure('Main.TFrame', background=CORES['bg_main'])
+
+
+def formatar_cpf(valor):
+    """
+    Recebe qualquer string e retorna CPF formatado.
+    Mantém zeros à esquerda.
+    """
+    numeros = re.sub(r"\D", "", valor)[:11]
+
+    if len(numeros) <= 3:
+        return numeros
+    elif len(numeros) <= 6:
+        return f"{numeros[:3]}.{numeros[3:]}"
+    elif len(numeros) <= 9:
+        return f"{numeros[:3]}.{numeros[3:6]}.{numeros[6:]}"
+    else:
+        return f"{numeros[:3]}.{numeros[3:6]}.{numeros[6:9]}-{numeros[9:]}"

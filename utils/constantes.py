@@ -3,15 +3,15 @@ import os
 VERSAO_ATUAL = "1.0"
 CAMINHO_EXE_ATUALIZADO = r"T:\MTSistem\app\MTSistem.exe"
 
-DB_DIR = r"T:\MTSistem\db"
-DB_PATH = os.path.join(DB_DIR, "sistemafiscal.db")
-
 
 MODULOS = {
     "abrir_extrator": "Extrator TXT → Excel",
     "abrir_comparador": "Comparador SEFAZ x Sistema",
     "abrir_triagem": "Triagem SPED → PDFs",
-    "abrir_extrator_pdf": "Extrator PDF → Excel"
+    "abrir_extrator_pdf": "Extrator PDF → Excel",
+    "abrir_diaristas": "Gerenciar Diaristas",
+    "abrir_parametros_diaria": "Parâmetros de Diária",
+    "abrir_centros_custo": "Centros de Custo"
 }
 
 CORES = {
