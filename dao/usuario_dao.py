@@ -60,7 +60,8 @@ class UsuarioDAO:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 valor_padrao REAL NOT NULL,
                 valor_diferente REAL,
-                valor_hora_extra REAL
+                valor_hora_extra REAL,
+                horas_por_diaria REAL NOT NULL   
             )
         """)
 
@@ -80,7 +81,7 @@ class UsuarioDAO:
                 vlr_total REAL NOT NULL,
                 descricao TEXT,
                 data_emissao TEXT NOT NULL,
-                caminho_arquivo TEXT
+                caminho_arquivo TEXT NOT NULL
             )
         """)
 

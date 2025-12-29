@@ -109,10 +109,10 @@ class DiaristasEmbed:
         self.tabela.bind("<<TreeviewSelect>>", self.selecionar)
 
         ttk.Button(left, text="➕ Novo", style="Add.TButton", command=self.novo)\
-            .pack(fill="x", pady=(10, 5))
+            .pack(fill="x", padx=5, pady=(10, 5))
 
         ttk.Button(left, text="🗑 Excluir", style="Danger.TButton", command=self.excluir)\
-            .pack(fill="x")
+            .pack(fill="x", padx=5, pady=(10, 5))
 
 
         # Form

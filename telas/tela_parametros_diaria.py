@@ -44,6 +44,7 @@ class TelaParametrosDiaria:
         self.entry_padrao = self.criar_campo(card, "Valor padrão")
         self.entry_diferente = self.criar_campo(card, "Valor diferente")
         self.entry_extra = self.criar_campo(card, "Valor hora extra")
+        self.entry_horas_por_diaria = self.criar_campo(card, "Horas por diária")
 
         ttk.Button(
             card,
@@ -65,12 +66,14 @@ class TelaParametrosDiaria:
             self.entry_padrao.insert(0, dados[1])
             self.entry_diferente.insert(0, dados[2])
             self.entry_extra.insert(0, dados[3])
+            self.entry_horas_por_diaria.insert(0, dados[4])
 
     def salvar(self):
         self.dao.salvar(
             self.entry_padrao.get(),
             self.entry_diferente.get(),
-            self.entry_extra.get()
+            self.entry_extra.get(),
+            self.entry_horas_por_diaria.get()
         )
         messagebox.showinfo("Sucesso", "Parâmetros salvos")
         self.janela.destroy()

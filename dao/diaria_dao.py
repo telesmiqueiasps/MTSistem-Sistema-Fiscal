@@ -1,0 +1,154 @@
+from database.conexao import garantir_banco
+from datetime import datetime
+
+
+class DiariaDAO:
+    def __init__(self):
+        self.conn = garantir_banco()
+
+    # =========================
+    # DIARISTAS
+    def listar_diaristas(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, nome FROM diaristas ORDER BY nome")
+        return cur.fetchall()
+
+    def buscar_cpf_diarista(self, diarista_id):
+        cur = self.conn.cursor()
+        cur.execute("SELECT cpf FROM diaristas WHERE id = ?", (diarista_id,))
+        row = cur.fetchone()
+        return row[0] if row else ""
+
+    # =========================
+    # CENTROS DE CUSTO
+    def listar_centros_custo(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, centro FROM centros_custo ORDER BY centro")
+        return cur.fetchall()
+
+    # =========================
+    # VALORES
+    def buscar_valores_diaria(self):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT valor_padrao, valor_diferente, valor_hora_extra, horas_por_diaria
+            FROM valores_diaria
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        return tuple(float(str(v).replace(",", ".")) for v in row)
+
+
+    def salvar_diaria(self, dados):
+        cur = self.conn.cursor()
+
+        cur.execute("""
+            INSERT INTO diarias (
+                tipo_diaria,
+                diarista,
+                cpf,
+                qtd_diarias,
+                tipo_valor,
+                vlr_diaria_hora,
+                vlr_horas_extras,
+                qtd_horas,
+                vlr_unitario,
+                centro_custo,
+                vlr_total,
+                descricao,
+                data_emissao,
+                caminho_arquivo
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            dados["tipo_diaria"],
+            dados["diarista"],
+            dados["cpf"],
+            dados["qtd_diarias"],
+            dados["tipo_valor"],
+            dados["vlr_diaria_hora"],
+            dados["vlr_horas_extras"],
+            dados["qtd_horas"],
+            dados["vlr_unitario"],
+            dados["centro_custo"],
+            dados["vlr_total"],
+            dados["descricao"],
+            dados["data_emissao"],
+            dados["caminho_arquivo"]
+        ))
+
+        self.conn.commit()
+        return cur.lastrowid
+
+
+    def listar_diarias(self, filtro=""):
+        cur = self.conn.cursor()
+
+        sql = """
+            SELECT id, diarista, cpf, vlr_total, data_emissao, caminho_arquivo
+            FROM diarias
+            WHERE diarista LIKE ? OR cpf LIKE ?
+            ORDER BY id DESC
+        """
+
+        cur.execute(sql, (f"%{filtro}%", f"%{filtro}%"))
+
+        dados = []
+        for r in cur.fetchall():
+            dados.append({
+                "id": r[0],
+                "diarista": r[1],
+                "cpf": r[2],
+                "vlr_total": r[3],
+                "data_emissao": r[4],
+                "caminho_arquivo": r[5]
+            })
+
+        return dados
+
+
+    
+
+    def excluir_diaria(self, id_diaria):
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM diarias WHERE id = ?", (id_diaria,))
+        self.conn.commit()
+
+    def buscar_diaria_por_id(self, id_diaria):
+        cur = self.conn.cursor()
+
+        cur.execute("""
+            SELECT
+                diarista,
+                cpf,
+                centro_custo,
+                qtd_diarias,
+                vlr_diaria_hora,
+                vlr_horas_extras,
+                vlr_total,
+                descricao,
+                tipo_diaria,
+                data_emissao
+            FROM diarias
+            WHERE id = ?
+        """, (id_diaria,))
+
+        r = cur.fetchone()
+        if not r:
+            return None
+
+        return {
+            "nome": r[0],
+            "cpf": r[1],
+            "centro": r[2],
+            "qtd_diarias": r[3],
+            "vlr_diaria_hora": r[4],
+            "vlr_horas_extras": r[5],
+            "valor_total": r[6],
+            "descricao": r[7],
+            "tipo_diaria": r[8],
+            "data_emissao": r[9]
+        }

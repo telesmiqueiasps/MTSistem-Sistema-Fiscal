@@ -73,6 +73,10 @@ class SistemaFiscal:
         self.limpar_content_area()
         CentrosCustoEmbed(self.content_area, self)
            
+    def abrir_diarias(self):
+        from telas.tela_diarias_emitidas import DiariasEmitidasEmbed
+        self.limpar_content_area()
+        DiariasEmitidasEmbed(self.content_area, self)
 
     def voltar_home(self):
         self.limpar_content_area()
@@ -200,6 +204,14 @@ class SistemaFiscal:
                 self.abrir_centros_custo,
                 icone="centro_custo.png"
             )
+
+        if is_admin or "abrir_diarias" in permissoes:
+            self.criar_menu_item(
+                menu_frame,
+                "Diárias",
+                self.abrir_diarias,
+                icone="diarias.png"
+            )    
 
             
         # Separador
