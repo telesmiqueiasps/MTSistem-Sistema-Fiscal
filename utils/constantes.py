@@ -9,9 +9,9 @@ MODULOS = {
     "abrir_comparador": "Comparador SEFAZ x Sistema",
     "abrir_triagem": "Triagem SPED → PDFs",
     "abrir_extrator_pdf": "Extrator PDF → Excel",
-    "abrir_diaristas": "Gerenciar Diaristas",
-    "abrir_parametros_diaria": "Parâmetros de Diária",
-    "abrir_centros_custo": "Centros de Custo"
+    "abrir_diaristas": "Cadastro de Diaristas",
+    "abrir_centros_custo": "Centros de Custo",
+    "abrir_diarias": "Emissor de Diárias",
 }
 
 CORES = {

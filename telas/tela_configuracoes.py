@@ -128,7 +128,7 @@ class TelaConfiguracoesSistema:
 
         ttk.Button(
             card,
-            text="Salvar configurações",
+            text="💾 Salvar configurações",
             style="Primary.TButton",
             command=self.salvar
         ).pack(anchor="e")

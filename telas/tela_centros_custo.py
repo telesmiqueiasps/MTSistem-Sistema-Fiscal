@@ -85,29 +85,7 @@ class CentrosCustoEmbed:
         ttk.Button(card, text="🗑 Excluir", style="Danger.TButton", command=self.excluir)\
             .pack(pady=20)
         
-        # Botão parametros
-        btn_parametros = tk.Button(
-            card,
-            text="🚪 Ajustes",
-            font=('Segoe UI', 9),
-            bg='white',
-            fg=CORES['primary'],
-            relief='flat',
-            cursor='hand2',
-            padx=20,
-            pady=8,
-            command=self.chamar_tela_parametros
-        )
-        btn_parametros.pack()
-
-        def parametros_hover_enter(e):
-            btn_parametros.config(bg=CORES['bg_card_hover'])
         
-        def parametros_hover_leave(e):
-            btn_parametros.config(bg='white')
-
-        btn_parametros.bind("<Enter>", parametros_hover_enter)
-        btn_parametros.bind("<Leave>", parametros_hover_leave)
 
     def carregar(self):
         self.lista.delete(0, tk.END)
@@ -146,7 +124,4 @@ class CentrosCustoEmbed:
             self.entry.delete(0, tk.END)
             self.carregar()
 
-    def chamar_tela_parametros(self):
-        from telas.tela_parametros_diaria import TelaParametrosDiaria
-
-        TelaParametrosDiaria(self.parent_frame)
+   

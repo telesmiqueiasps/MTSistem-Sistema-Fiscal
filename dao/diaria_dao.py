@@ -126,6 +126,8 @@ class DiariaDAO:
                 cpf,
                 centro_custo,
                 qtd_diarias,
+                qtd_horas,
+                vlr_unitario,    
                 vlr_diaria_hora,
                 vlr_horas_extras,
                 vlr_total,
@@ -145,10 +147,12 @@ class DiariaDAO:
             "cpf": r[1],
             "centro": r[2],
             "qtd_diarias": r[3],
-            "vlr_diaria_hora": r[4],
-            "vlr_horas_extras": r[5],
-            "valor_total": r[6],
-            "descricao": r[7],
-            "tipo_diaria": r[8],
-            "data_emissao": r[9]
+            "qtd_horas": r[4],
+            "vlr_unitario": r[5],
+            "vlr_diaria_hora": r[6],
+            "vlr_horas_extras": r[7],
+            "valor_total": r[8],
+            "descricao": r[9],
+            "tipo_diaria": r[10],
+            "data_emissao": r[11]
         }

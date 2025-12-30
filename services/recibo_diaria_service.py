@@ -7,6 +7,10 @@ import tempfile
 import os
 import sys
 import subprocess
+from reportlab.platypus import Paragraph, Frame
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_JUSTIFY
+
 
 from dao.empresa_dao import EmpresaDAO
 from utils.auxiliares import resource_path
@@ -46,7 +50,7 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
         tmp.close()
 
     # =========================
-    # Buscar dados da empresa
+    # Buscar empresa
     # =========================
     empresa = EmpresaDAO().buscar_empresa()
     if not empresa:
@@ -90,66 +94,98 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
         f"CNPJ: {empresa['cnpj']}  |  IE: {empresa['inscricao_estadual']}"
     )
 
-    endereco_completo = (
+    endereco = (
         f"{empresa['endereco']} - CEP: {empresa['cep']} "
         f"- {empresa['cidade']}/{empresa['uf']}"
     )
+    c.drawCentredString(largura / 2, y - 44, endereco)
 
-    c.drawCentredString(largura / 2, y - 44, endereco_completo)
-
-    # Linha separadora
     c.line(2 * cm, y - 60, largura - 2 * cm, y - 60)
 
     # =========================
-    # Título Recibo
+    # Título
     # =========================
-    y = y - 90
     c.setFont("Helvetica-Bold", 15)
-    c.drawCentredString(largura / 2, y, "RECIBO DE DIÁRIA")
-
-    y -= 40
-    c.setFont("Helvetica", 11)
-
-    def linha(label, valor):
-        nonlocal y
-        c.drawString(2 * cm, y, f"{label}: {valor}")
-        y -= 20
+    c.drawCentredString(largura / 2, y - 90, "RECIBO DE DIÁRIA")
 
     # =========================
-    # Dados da Diária
+    # Texto corrido (JUSTIFICADO)
     # =========================
-    linha("Diarista", dados["nome"])
-    linha("CPF", dados["cpf"])
-    linha("Centro de custo", dados["centro"])
-    linha("Quantidade de diárias", dados["qtd_diarias"])
-    linha("Valor das diárias", f"R$ {dados['vlr_diaria_hora']:.2f}")
-    linha("Valor horas extras", f"R$ {dados['vlr_horas_extras']:.2f}")
-    linha("Valor total", f"R$ {dados['valor_total']:.2f}")
+    styles = getSampleStyleSheet()
+    style = ParagraphStyle(
+        "Justificado",
+        parent=styles["Normal"],
+        alignment=TA_JUSTIFY,
+        fontName="Helvetica",
+        fontSize=11,
+        leading=16
+    )
+
+    valor_total = f"R$ {dados['valor_total']:.2f}"
+    qtd_diarias = dados["qtd_diarias"]
+
+    if dados["tipo_diaria"] == "com_hora":
+        complemento = (
+            f"e {dados['qtd_horas']} hora(s) extra(s) "
+            f"na produção de {dados['centro']}"
+        )
+    else:
+        complemento = "pela prestação do serviço abaixo descrito"
+
+    texto = f"""
+    Recebi da empresa <b>{empresa['razao_social']}</b>, inscrita no CNPJ sob nº
+    <b>{empresa['cnpj']}</b>, a importância de <b>{valor_total}</b> referente ao
+    pagamento de <b>{qtd_diarias}</b> diária(s) {complemento}, onde ASSINO E
+    CONFIRMO como verdadeiras as informações aqui prestadas, comprometendo-me
+    dessa forma a não reclamar outro valor a respeito da mesma, do qual dou
+    plena, geral e irrevogável quitação de pago do exposto acima.
+    """
+
+    frame = Frame(
+        2 * cm,
+        7 * cm,
+        largura - 4 * cm,
+        altura - 17 * cm,
+        showBoundary=0
+    )
+
+    frame.addFromList([Paragraph(texto, style)], c)
 
     # =========================
-    # Descrição
+    # Detalhamento financeiro
     # =========================
-    if dados.get("descricao"):
-        y -= 10
-        c.drawString(2 * cm, y, "Descrição:")
-        y -= 15
-        text = c.beginText(2.5 * cm, y)
-        for linha_desc in dados["descricao"].split("\n"):
-            text.textLine(linha_desc)
-        c.drawText(text)
-        y = text.getY() - 20
+    y = 6.5 * cm
+    c.setFont("Helvetica", 10)
+
+    if dados["tipo_diaria"] == "com_hora":
+        c.drawString(
+            2 * cm,
+            y,
+            f"Valor referente às diárias: R$ {dados['vlr_diaria_hora']:.2f}"
+        )
+        y -= 14
+        c.drawString(
+            2 * cm,
+            y,
+            f"Valor referente às horas extras: R$ {dados['vlr_horas_extras']:.2f}"
+        )
+    else:
+        c.drawString(
+            2 * cm,
+            y,
+            f"Serviço prestado: {dados.get('descricao', '')}"
+        )
 
     # =========================
     # Assinatura
     # =========================
-    y -= 40
+    y -= 50
     c.line(4 * cm, y, largura - 4 * cm, y)
 
-    c.setFont("Helvetica", 10)
     c.drawCentredString(
         largura / 2,
         y - 15,
-        f"{dados['nome']} - CPF: {dados['cpf']}"
+        f"{dados['nome']} – CPF: {dados['cpf']}"
     )
 
     # =========================
@@ -158,7 +194,7 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     c.drawString(
         2 * cm,
         2 * cm,
-        f"Emitido em: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        f"Emitido em: {empresa['cidade']}/{empresa['uf']} - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     )
 
     c.showPage()
@@ -168,3 +204,4 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
         abrir_pdf(caminho)
 
     return caminho
+

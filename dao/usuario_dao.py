@@ -188,6 +188,9 @@ class UsuarioDAO:
                 "abrir_comparador",
                 "abrir_triagem",
                 "abrir_extrator_pdf",
+                "abrir_diaristas",
+                "abrir_centros_custo",
+                "abrir_diarias",
                 "usuarios_admin"
             ]
 

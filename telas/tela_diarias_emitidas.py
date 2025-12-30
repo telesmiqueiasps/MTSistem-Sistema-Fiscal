@@ -93,6 +93,31 @@ class DiariasEmitidasEmbed:
             command=self.abrir_recibo
         ).pack(pady=5, padx=5, side="right")
 
+        # Botão parametros
+        btn_parametros = tk.Button(
+            buttons_frame,
+            text="⚙️ Ajustes",
+            font=('Segoe UI', 9),
+            bg=CORES['bg_main'],
+            fg=CORES['primary'],
+            relief='flat',
+            cursor='hand2',
+            padx=20,
+            pady=8,
+            command=self.chamar_tela_parametros
+        )
+
+        btn_parametros.pack()
+
+        def parametros_hover_enter(e):
+            btn_parametros.config(bg=CORES['bg_card_hover'])
+        
+        def parametros_hover_leave(e):
+            btn_parametros.config(bg=CORES['bg_main'])
+
+        btn_parametros.bind("<Enter>", parametros_hover_enter)
+        btn_parametros.bind("<Leave>", parametros_hover_leave)
+
         # 🔍 Busca por digitação
         self.var_busca = tk.StringVar()
         busca = ttk.Entry(main_frame, textvariable=self.var_busca)
@@ -206,3 +231,9 @@ class DiariasEmitidasEmbed:
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao excluir diária:\n{e}")
+
+
+    def chamar_tela_parametros(self):
+        from telas.tela_parametros_diaria import TelaParametrosDiaria
+
+        TelaParametrosDiaria(self.parent_frame)

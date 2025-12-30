@@ -29,8 +29,11 @@ class TelaReciboDiaria(tk.Toplevel):
         self.linha("CPF", self.dados["cpf"])
         self.linha("Centro de custo", self.dados["centro"])
         self.linha("Qtd. Diárias", self.dados["qtd_diarias"])
-        self.linha("Valor Diárias", f"R$ {self.dados['vlr_diaria_hora']:.2f}")
-        self.linha("Valor Horas Extras", f"R$ {self.dados['vlr_horas_extras']:.2f}")
+        self.linha("Valor Diária", f"R$ {self.dados['vlr_unitario']:.2f}")
+        if self.dados["tipo_diaria"] == "com_hora":
+            self.linha("Qtd. Horas Extras", self.dados["qtd_horas"])
+            self.linha("Valor Diárias", f"R$ {self.dados['vlr_diaria_hora']:.2f}")
+            self.linha("Valor Horas Extras", f"R$ {self.dados['vlr_horas_extras']:.2f}")
         self.linha("Valor Total", f"R$ {self.dados['valor_total']:.2f}")
 
         if self.dados.get("descricao"):

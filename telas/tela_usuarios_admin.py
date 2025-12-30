@@ -56,14 +56,14 @@ class TelaUsuariosAdmin:
 
         ttk.Button(
             left,
-            text="Novo Usuário",
+            text="➕ Novo Usuário",
             style='Add.TButton',
             command=self.novo_usuario
         ).pack(fill="x", pady=(5, 0))
 
         ttk.Button(
             left,
-            text="Excluir Usuário",
+            text="🗑 Excluir Usuário",
             style='Danger.TButton',
             command=self.excluir_usuario
         ).pack(fill="x", pady=5)
@@ -112,24 +112,65 @@ class TelaUsuariosAdmin:
             font=('Segoe UI', 12, 'bold'),
             foreground=CORES['primary'],
             background=CORES['bg_card']
-        ).pack(anchor="w", pady=(15, 5))
+        ).pack(anchor="w", pady=(20, 10))
 
-        perms = ttk.Frame(right, style="Card.TFrame")
-        perms.pack(anchor="w")
+        perms_container = ttk.Frame(right, style="Card.TFrame")
+        perms_container.pack(fill="x", pady=(0, 10))
 
-        for modulo, label in MODULOS.items():
+        # Criar 3 colunas
+        col1 = ttk.Frame(perms_container, style="Card.TFrame")
+        col2 = ttk.Frame(perms_container, style="Card.TFrame")
+        col3 = ttk.Frame(perms_container, style="Card.TFrame")
+
+        col1.pack(side="left", fill="both", expand=True, padx=(0, 20))
+        col2.pack(side="left", fill="both", expand=True, padx=(0, 20))
+        col3.pack(side="left", fill="both", expand=True)
+
+        # Lista de módulos (assumindo que MODULOS é um dict como: {"abrir_extrator": "Extrator TXT → Excel", ...})
+        modulos_list = list(MODULOS.items())
+        total = len(modulos_list)
+        por_coluna = (total + 2) // 3  # Distribui igualmente (arredonda pra cima)
+
+        # Coluna 1
+        for i in range(0, min(por_coluna, total)):
+            modulo, label = modulos_list[i]
             var = tk.IntVar()
             self.vars_permissoes[modulo] = var
             ttk.Checkbutton(
-                perms,
+                col1,
                 text=label,
                 style="Custom.TCheckbutton",
                 variable=var
-            ).pack(anchor="w", pady=(15, 2))
+            ).pack(anchor="w", pady=4)
 
+        # Coluna 2
+        for i in range(por_coluna, min(por_coluna * 2, total)):
+            modulo, label = modulos_list[i]
+            var = tk.IntVar()
+            self.vars_permissoes[modulo] = var
+            ttk.Checkbutton(
+                col2,
+                text=label,
+                style="Custom.TCheckbutton",
+                variable=var
+            ).pack(anchor="w", pady=4)
+
+        # Coluna 3
+        for i in range(por_coluna * 2, total):
+            modulo, label = modulos_list[i]
+            var = tk.IntVar()
+            self.vars_permissoes[modulo] = var
+            ttk.Checkbutton(
+                col3,
+                text=label,
+                style="Custom.TCheckbutton",
+                variable=var
+            ).pack(anchor="w", pady=4)
+
+        # Botão salvar
         ttk.Button(
             right,
-            text="Salvar alterações",
+            text="💾 Salvar alterações",
             style='Primary.TButton',
             command=self.salvar
         ).pack(pady=20)

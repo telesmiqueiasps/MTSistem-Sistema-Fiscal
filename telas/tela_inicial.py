@@ -87,11 +87,13 @@ class SistemaFiscal:
         if self.content_area:
             for widget in self.content_area.winfo_children():
                 widget.destroy()
+                
 
     def criar_interface(self):
         from telas.tela_usuarios_admin import TelaUsuariosAdmin
         from telas.tela_configuracoes import TelaConfiguracoesSistema
         from telas.tela_empresa import TelaEmpresa
+
         # =========================
         # CONTAINER PRINCIPAL
         # =========================
@@ -99,40 +101,16 @@ class SistemaFiscal:
         main_container.pack(fill="both", expand=True)
 
         # =========================
-        # SIDEBAR LATERAL COM SCROLL
+        # SIDEBAR LATERAL
         # =========================
         sidebar = tk.Frame(main_container, bg=CORES['primary'], width=280)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        # Canvas e scrollbar para o sidebar
-        canvas = tk.Canvas(sidebar, bg=CORES['primary'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=canvas.yview)
-        
-        # Frame scrollável dentro do canvas
-        scrollable_frame = tk.Frame(canvas, bg=CORES['primary'])
-        
-        # Configurar o scroll
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Pack do canvas e scrollbar
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # Habilitar scroll com mouse wheel
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # Logo e título no sidebar
-        logo_frame = tk.Frame(scrollable_frame, bg=CORES['primary'])
+        # =========================
+        # TOPO FIXO (Logo + Título)
+        # =========================
+        logo_frame = tk.Frame(sidebar, bg=CORES['primary'])
         logo_frame.pack(fill="x", pady=(30, 20))
 
         caminho_logo = resource_path("Icones/logo_branca.png")
@@ -140,11 +118,7 @@ class SistemaFiscal:
         img = img.resize((60, 60), Image.LANCZOS)
         self.logo_img = ImageTk.PhotoImage(img)
 
-        tk.Label(
-            logo_frame,
-            image=self.logo_img,
-            bg=CORES['primary']
-        ).pack()
+        tk.Label(logo_frame, image=self.logo_img, bg=CORES['primary']).pack()
 
         tk.Label(
             logo_frame,
@@ -163,119 +137,117 @@ class SistemaFiscal:
         ).pack()
 
         # Separador
-        tk.Frame(scrollable_frame, bg='white', height=1).pack(fill="x", pady=20, padx=20)
+        tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=10, padx=20)
 
-        # Verificar permissões
+        # =========================
+        # ÁREA ROLÁVEL DO MENU
+        # =========================
+        menu_container = tk.Frame(sidebar, bg=CORES['primary'])
+        menu_container.pack(fill="both", expand=True)
+
+        # Canvas + Scrollbar
+        canvas = tk.Canvas(menu_container, bg=CORES['primary'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(menu_container, orient="vertical", command=canvas.yview, width=12)
+        self.menu_scrollable = tk.Frame(canvas, bg=CORES['primary'])
+
+        # === CORREÇÃO PRINCIPAL: largura fixa igual à sidebar ===
+        self.menu_scrollable.config(width=280)  # Mesma largura da sidebar
+        canvas.create_window((0, 0), window=self.menu_scrollable, anchor="nw", width=280)
+
+        self.menu_scrollable.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Scroll só quando o mouse estiver sobre a sidebar
+        def _ativar_scroll(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+            canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+
+        def _desativar_scroll(event):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        menu_container.bind("<Enter>", _ativar_scroll)
+        menu_container.bind("<Leave>", _desativar_scroll)
+
+        # =========================
+        # CONTEÚDO DO MENU (agora dentro da área rolável)
+        # =========================
+        menu_frame = self.menu_scrollable  # Tudo vai aqui agora!
+
         dao = UsuarioDAO()
         is_admin = dao.is_admin(self.usuario_id)
         permissoes = dao.permissoes_usuario(self.usuario_id)
 
-        # Menu de navegação
-        menu_frame = tk.Frame(scrollable_frame, bg=CORES['primary'])
-        menu_frame.pack(fill="both", expand=True, pady=10)
-
         # Botão Home
-        self.criar_menu_item(
+        self.criar_menu_item(menu_frame, "Início", self.voltar_home, icone="inicio.png")
+
+        tk.Label(
             menu_frame,
-            "Início",
-            self.voltar_home,
-            icone="inicio.png"
-        )
+            text="MÓDULOS",
+            font=('Segoe UI', 8, 'bold'),
+            bg=CORES['primary'],
+            fg='#a0aec0',
+            anchor='w'
+        ).pack(fill="x", pady=(15, 8), padx=15)
 
         # Módulos
         if is_admin or "abrir_extrator" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Extrator TXT → Excel",
-                self.abrir_extrator,
-                icone="txt.png"
-            )
+            self.criar_menu_item(menu_frame, "Extrator TXT → Excel", self.abrir_extrator, icone="txt.png")
 
         if is_admin or "abrir_comparador" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Comparador SEFAZ",
-                self.abrir_comparador,
-                icone="comparador.png"
-            )
+            self.criar_menu_item(menu_frame, "Comparador SEFAZ", self.abrir_comparador, icone="comparador.png")
 
         if is_admin or "abrir_triagem" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Triagem SPED",
-                self.abrir_triagem,
-                icone="sped.png"
-            )
+            self.criar_menu_item(menu_frame, "Triagem SPED", self.abrir_triagem, icone="sped.png")
 
         if is_admin or "abrir_extrator_pdf" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Extrator PDF → Excel",
-                self.abrir_extrator_pdf,
-                icone="pdf.png"
-            )
+            self.criar_menu_item(menu_frame, "Extrator PDF → Excel", self.abrir_extrator_pdf, icone="pdf.png")
 
         if is_admin or "abrir_diaristas" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Diaristas",
-                self.abrir_diaristas,
-                icone="diarista.png"
-            )
+            self.criar_menu_item(menu_frame, "Cadastro de Diaristas", self.abrir_diaristas, icone="diarista.png")
 
         if is_admin or "abrir_centros_custo" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Centros de Custo",
-                self.abrir_centros_custo,
-                icone="centro_custo.png"
-            )
+            self.criar_menu_item(menu_frame, "Centros de Custo", self.abrir_centros_custo, icone="centro_custo.png")
 
         if is_admin or "abrir_diarias" in permissoes:
-            self.criar_menu_item(
-                menu_frame,
-                "Diárias",
-                self.abrir_diarias,
-                icone="diarias.png"
-            )    
+            self.criar_menu_item(menu_frame, "Emissor de Diárias", self.abrir_diarias, icone="diarias.png")
 
-            
-        # Separador
-        tk.Frame(scrollable_frame, bg='white', height=1).pack(fill="x", pady=10, padx=20)
-
-        # Admin
+        # Separador antes da administração
         if is_admin:
-            self.criar_menu_item(
-                menu_frame,
-                "Usuários",
-                lambda: TelaUsuariosAdmin(self.root),
-                icone="usuarios.png",
-                is_admin_btn=True,
-            )
 
-        if is_admin:
-            self.criar_menu_item(
+            tk.Label(
                 menu_frame,
-                "Configurações do Sistema",
-                lambda: TelaConfiguracoesSistema(self.root),
-                icone="config.png",
-                is_admin_btn=True,
-            )
+                text="ADMINISTRAÇÃO",
+                font=('Segoe UI', 8, 'bold'),
+                bg=CORES['primary'],
+                fg='#a0aec0',
+                anchor='w'
+            ).pack(fill="x", pady=(15, 8), padx=15)
 
-        if is_admin:
-            self.criar_menu_item(
-                menu_frame,
-                "Cadastro da Empresa",
-                lambda: TelaEmpresa(self.root),
-                icone="config.png",
-                is_admin_btn=True,
-            )        
+            self.criar_menu_item(menu_frame, "Usuários", lambda: TelaUsuariosAdmin(self.root), icone="usuarios.png", is_admin_btn=True)
+            self.criar_menu_item(menu_frame, "Configurações do Sistema", lambda: TelaConfiguracoesSistema(self.root), icone="config.png", is_admin_btn=True)
+            self.criar_menu_item(menu_frame, "Cadastro da Empresa", lambda: TelaEmpresa(self.root), icone="empresa.png", is_admin_btn=True)
 
-        # Rodapé do sidebar
-        footer_sidebar = tk.Frame(scrollable_frame, bg=CORES['primary'])
+        # =========================
+        # RODAPÉ FIXO (sempre visível)
+        # =========================
+        footer_sidebar = tk.Frame(sidebar, bg=CORES['primary'])
         footer_sidebar.pack(fill="x", side="bottom", pady=20)
 
-        # Info do usuário
+        tk.Frame(footer_sidebar, bg='white', height=1).pack(fill="x", pady=15, padx=20)
+
         tk.Label(
             footer_sidebar,
             text=f"👤 {self.usuario_nome}",
@@ -284,7 +256,6 @@ class SistemaFiscal:
             fg='white'
         ).pack(pady=(0, 10))
 
-        # Botão sair
         btn_sair = tk.Button(
             footer_sidebar,
             text="🚪 Sair",
@@ -299,11 +270,8 @@ class SistemaFiscal:
         )
         btn_sair.pack()
 
-        def sair_hover_enter(e):
-            btn_sair.config(bg=CORES['bg_card_hover'])
-        
-        def sair_hover_leave(e):
-            btn_sair.config(bg='white')
+        def sair_hover_enter(e): btn_sair.config(bg=CORES['bg_card_hover'])
+        def sair_hover_leave(e): btn_sair.config(bg='white')
 
         btn_sair.bind("<Enter>", sair_hover_enter)
         btn_sair.bind("<Leave>", sair_hover_leave)
@@ -314,29 +282,29 @@ class SistemaFiscal:
         self.content_area = ttk.Frame(main_container, style='Main.TFrame')
         self.content_area.pack(side="right", fill="both", expand=True)
 
-        # Mostrar tela inicial
         self.mostrar_home()
 
     def criar_menu_item(self, parent, texto, comando, icone=None, is_admin_btn=False):
-        btn_frame = tk.Frame(parent, bg=CORES['primary'])
-        btn_frame.pack(fill="x", padx=15, pady=5)
+        # Frame principal do item (altura fixa pequena e controle total)
+        btn = tk.Frame(parent, bg=CORES['primary'], cursor='hand2', height=36)
+        btn.pack(fill="x", padx=12, pady=2)  # Menos pady (era 5+2+10 = muito espaço)
+        btn.pack_propagate(False)  # Mantém altura fixa
 
-        btn = tk.Frame(btn_frame, bg=CORES['primary'], cursor='hand2')
-        btn.pack(fill="x", pady=2)
-
+        # Container interno para ícone + texto
         inner = tk.Frame(btn, bg=CORES['primary'])
-        inner.pack(fill="x", padx=15, pady=10)
+        inner.pack(fill="both", expand=True, padx=15)
 
         # Ícone
+        lbl_icon = None
         if icone:
             caminho_icone = resource_path(f"Icones/{icone}")
             img = Image.open(caminho_icone)
-            img = img.resize((24, 24), Image.LANCZOS)
+            img = img.resize((18, 18), Image.LANCZOS)
             icon_img = ImageTk.PhotoImage(img)
 
             lbl_icon = tk.Label(inner, image=icon_img, bg=CORES['primary'])
             lbl_icon.image = icon_img
-            lbl_icon.pack(side="left", padx=(0, 10))
+            lbl_icon.pack(side="left", padx=(0, 12))
 
         # Texto
         lbl_text = tk.Label(
@@ -347,35 +315,40 @@ class SistemaFiscal:
             fg='white',
             anchor='w'
         )
-        lbl_text.pack(side="left", fill="x")
+        lbl_text.pack(side="left", fill="x", expand=True)
 
-        # Hover effects
+        # Cores do hover
+        cor_normal = CORES['primary']
+        cor_hover = '#f8f9fa'  # Cor clara suave (ou mude para '#2c313c' se quiser mais escuro)
+
+        # Hover ESTÁVEL: só no frame principal
         def on_enter(e):
-            btn.config(bg='white')
-            inner.config(bg='white')
-            lbl_text.config(bg='white', fg=CORES['primary'])
-            if icone:
-                lbl_icon.config(bg=CORES['primary'])
+            btn.config(bg=cor_hover)
+            inner.config(bg=cor_hover)
+            lbl_text.config(bg=cor_hover, fg=CORES['primary'])
+            if lbl_icon:
+                lbl_icon.config(bg=cor_hover)
 
         def on_leave(e):
-            btn.config(bg=CORES['primary'])
-            inner.config(bg=CORES['primary'])
-            lbl_text.config(bg=CORES['primary'], fg='white')
-            if icone:
-                lbl_icon.config(bg=CORES['primary'])
+            btn.config(bg=cor_normal)
+            inner.config(bg=cor_normal)
+            lbl_text.config(bg=cor_normal, fg='white')
+            if lbl_icon:
+                lbl_icon.config(bg=cor_normal)
 
-        def on_click(e):
+        # Eventos apenas no btn principal → hover perfeito sem piscar
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+
+        # Clique em qualquer lugar
+        def clique(e):
             comando()
 
-        for widget in [btn, inner, lbl_text]:
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
-            widget.bind("<Button-1>", on_click)
-
-        if icone:
-            lbl_icon.bind("<Enter>", on_enter)
-            lbl_icon.bind("<Leave>", on_leave)
-            lbl_icon.bind("<Button-1>", on_click)
+        btn.bind("<Button-1>", clique)
+        inner.bind("<Button-1>", clique)
+        lbl_text.bind("<Button-1>", clique)
+        if lbl_icon:
+            lbl_icon.bind("<Button-1>", clique)
 
     
     def mostrar_home(self):
