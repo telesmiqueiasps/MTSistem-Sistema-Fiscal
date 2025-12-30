@@ -41,6 +41,22 @@ class UsuarioDAO:
         """)
 
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS empresa (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                razao_social TEXT NOT NULL,
+                nome_fantasia TEXT,
+                cnpj TEXT NOT NULL UNIQUE,
+                inscricao_estadual TEXT,
+                endereco TEXT,
+                cep TEXT,
+                cidade TEXT,
+                uf TEXT,
+                contato TEXT
+            )
+        """)
+
+
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS diaristas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome TEXT NOT NULL,

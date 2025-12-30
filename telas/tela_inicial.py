@@ -91,7 +91,7 @@ class SistemaFiscal:
     def criar_interface(self):
         from telas.tela_usuarios_admin import TelaUsuariosAdmin
         from telas.tela_configuracoes import TelaConfiguracoesSistema
-
+        from telas.tela_empresa import TelaEmpresa
         # =========================
         # CONTAINER PRINCIPAL
         # =========================
@@ -99,14 +99,40 @@ class SistemaFiscal:
         main_container.pack(fill="both", expand=True)
 
         # =========================
-        # SIDEBAR LATERAL
+        # SIDEBAR LATERAL COM SCROLL
         # =========================
         sidebar = tk.Frame(main_container, bg=CORES['primary'], width=280)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
+        # Canvas e scrollbar para o sidebar
+        canvas = tk.Canvas(sidebar, bg=CORES['primary'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=canvas.yview)
+        
+        # Frame scrollável dentro do canvas
+        scrollable_frame = tk.Frame(canvas, bg=CORES['primary'])
+        
+        # Configurar o scroll
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack do canvas e scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Habilitar scroll com mouse wheel
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
         # Logo e título no sidebar
-        logo_frame = tk.Frame(sidebar, bg=CORES['primary'])
+        logo_frame = tk.Frame(scrollable_frame, bg=CORES['primary'])
         logo_frame.pack(fill="x", pady=(30, 20))
 
         caminho_logo = resource_path("Icones/logo_branca.png")
@@ -137,7 +163,7 @@ class SistemaFiscal:
         ).pack()
 
         # Separador
-        tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=20, padx=20)
+        tk.Frame(scrollable_frame, bg='white', height=1).pack(fill="x", pady=20, padx=20)
 
         # Verificar permissões
         dao = UsuarioDAO()
@@ -145,7 +171,7 @@ class SistemaFiscal:
         permissoes = dao.permissoes_usuario(self.usuario_id)
 
         # Menu de navegação
-        menu_frame = tk.Frame(sidebar, bg=CORES['primary'])
+        menu_frame = tk.Frame(scrollable_frame, bg=CORES['primary'])
         menu_frame.pack(fill="both", expand=True, pady=10)
 
         # Botão Home
@@ -215,7 +241,7 @@ class SistemaFiscal:
 
             
         # Separador
-        tk.Frame(sidebar, bg='white', height=1).pack(fill="x", pady=10, padx=20)
+        tk.Frame(scrollable_frame, bg='white', height=1).pack(fill="x", pady=10, padx=20)
 
         # Admin
         if is_admin:
@@ -234,12 +260,19 @@ class SistemaFiscal:
                 lambda: TelaConfiguracoesSistema(self.root),
                 icone="config.png",
                 is_admin_btn=True,
-            )    
+            )
 
-
+        if is_admin:
+            self.criar_menu_item(
+                menu_frame,
+                "Cadastro da Empresa",
+                lambda: TelaEmpresa(self.root),
+                icone="config.png",
+                is_admin_btn=True,
+            )        
 
         # Rodapé do sidebar
-        footer_sidebar = tk.Frame(sidebar, bg=CORES['primary'])
+        footer_sidebar = tk.Frame(scrollable_frame, bg=CORES['primary'])
         footer_sidebar.pack(fill="x", side="bottom", pady=20)
 
         # Info do usuário
