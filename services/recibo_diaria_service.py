@@ -62,19 +62,22 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     c = canvas.Canvas(caminho, pagesize=A4)
     largura, altura = A4
 
-    y = altura - 40
+    y = altura - 80
 
     # =========================
     # Logo
     # =========================
+    logo_largura = 80
+    logo_altura = 80
+
     try:
         caminho_logo = resource_path("Icones/logo_empresa.png")
         c.drawImage(
             caminho_logo,
-            2 * cm,
-            y - 60,
-            width=60,
-            height=60,
+            (largura - logo_largura) / 2,  # 👈 correção
+            y - 10,
+            width=logo_largura,
+            height=logo_altura,
             preserveAspectRatio=True,
             mask="auto"
         )
@@ -105,8 +108,23 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     # =========================
     # Título
     # =========================
+    if dados["tipo_diaria"] == "com_hora":
+        titulo = (
+            f"RECIBO DE DIÁRIA E HORA EXTRA"
+        )
+    else:
+        titulo = "RECIBO DE DIÁRIA"
+
+    y_atual = y - 120
+
     c.setFont("Helvetica-Bold", 15)
-    c.drawCentredString(largura / 2, y - 90, "RECIBO DE DIÁRIA")
+    c.drawCentredString(largura / 2, y_atual, titulo)
+
+    y_atual -= 60
+
+    valor_total = f"R$ {dados['valor_total']:.2f}"
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(largura - 4 * cm, y_atual, valor_total)
 
     # =========================
     # Texto corrido (JUSTIFICADO)
@@ -154,7 +172,9 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     # =========================
     # Detalhamento financeiro
     # =========================
-    y = 6.5 * cm
+    y_atual = altura - 17 * cm
+    y_atual -= 40
+    y = y_atual
     c.setFont("Helvetica", 10)
 
     if dados["tipo_diaria"] == "com_hora":
@@ -179,7 +199,8 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     # =========================
     # Assinatura
     # =========================
-    y -= 50
+    y_atual -= 80
+    y = y_atual
     c.line(4 * cm, y, largura - 4 * cm, y)
 
     c.drawCentredString(
@@ -194,7 +215,7 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     c.drawString(
         2 * cm,
         2 * cm,
-        f"Emitido em: {empresa['cidade']}/{empresa['uf']} - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        f"Emitido e assinado em: {empresa['cidade']}/{empresa['uf']} - {dados['data_emissao']}"
     )
 
     c.showPage()

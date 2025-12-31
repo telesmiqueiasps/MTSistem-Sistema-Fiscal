@@ -118,6 +118,14 @@ class DiariasEmitidasEmbed:
         btn_parametros.bind("<Enter>", parametros_hover_enter)
         btn_parametros.bind("<Leave>", parametros_hover_leave)
 
+        ttk.Label(
+            main_frame,
+            text="🔍Buscar:",
+            font=('Segoe UI', 9),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
         # 🔍 Busca por digitação
         self.var_busca = tk.StringVar()
         busca = ttk.Entry(main_frame, textvariable=self.var_busca)
@@ -127,19 +135,31 @@ class DiariasEmitidasEmbed:
         # 📊 Tabela
         self.tree = ttk.Treeview(
             main_frame,
-            columns=("nome", "cpf", "valor", "data"),
+            columns=("nome", "cpf", "qtd_diarias", "valor", "descricao", "data"),
             show="headings",
             height=15
         )
 
+        # Cabeçalhos
         self.tree.heading("nome", text="Diarista")
         self.tree.heading("cpf", text="CPF")
+        self.tree.heading("qtd_diarias", text="Qtd. Diárias")
         self.tree.heading("valor", text="Valor Total")
+        self.tree.heading("descricao", text="Descrição")
         self.tree.heading("data", text="Data")
 
-        self.tree.column("valor", anchor="e")
+        # Colunas (largura e alinhamento)
+        self.tree.column("nome", width=200, minwidth=200, anchor="w", stretch=False)
+        self.tree.column("cpf", width=100, minwidth=100, anchor="center", stretch=False)
+        self.tree.column("qtd_diarias", width=80, minwidth=80, anchor="center", stretch=False)
+        self.tree.column("valor", width=90, minwidth=90, anchor="e", stretch=False)
+        self.tree.column("data", width=120, minwidth=120, anchor="center", stretch=False)
+
+        # Descrição ocupa o espaço restante
+        self.tree.column("descricao", width=200, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
+
 
 
     # =====================================================
@@ -155,7 +175,9 @@ class DiariasEmitidasEmbed:
                 values=(
                     d["diarista"],
                     d["cpf"],
+                    d["qtd_diarias"],
                     f"R$ {d['vlr_total']:.2f}".replace(".", ","),
+                    d["descricao"],
                     d["data_emissao"]
                 ),
                 tags=(str(d["id"]), d["caminho_arquivo"])

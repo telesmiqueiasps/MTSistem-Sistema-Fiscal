@@ -48,7 +48,7 @@ class TelaParametrosDiaria:
 
         ttk.Button(
             card,
-            text="Salvar parâmetros",
+            text="💾 Salvar parâmetros",
             style="Primary.TButton",
             command=self.salvar
         ).pack(pady=20)

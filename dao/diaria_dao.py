@@ -88,7 +88,7 @@ class DiariaDAO:
         cur = self.conn.cursor()
 
         sql = """
-            SELECT id, diarista, cpf, vlr_total, data_emissao, caminho_arquivo
+            SELECT id, diarista, cpf, qtd_diarias, vlr_total, descricao, data_emissao, caminho_arquivo
             FROM diarias
             WHERE diarista LIKE ? OR cpf LIKE ?
             ORDER BY id DESC
@@ -102,9 +102,11 @@ class DiariaDAO:
                 "id": r[0],
                 "diarista": r[1],
                 "cpf": r[2],
-                "vlr_total": r[3],
-                "data_emissao": r[4],
-                "caminho_arquivo": r[5]
+                "qtd_diarias": r[3],
+                "vlr_total": r[4],
+                "descricao": r[5],
+                "data_emissao": r[6],
+                "caminho_arquivo": r[7]
             })
 
         return dados

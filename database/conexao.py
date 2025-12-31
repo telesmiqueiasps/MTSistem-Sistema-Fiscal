@@ -1,8 +1,8 @@
 import os
 import sqlite3
 
-DB_DIR = r"T:\MTSistem\db"
-#DB_DIR = r"C:\Users\Mateus\Documents\Miquéias\MTSistem-Sistema-Fiscal\db"
+#DB_DIR = r"T:\MTSistem\db"
+DB_DIR = r"C:\Users\Mateus\Documents\Miquéias\MTSistem-Sistema-Fiscal\db"
 
 DB_PATH = os.path.join(DB_DIR, "sistemafiscal.db")
 

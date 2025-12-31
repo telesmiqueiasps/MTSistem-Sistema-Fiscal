@@ -79,7 +79,7 @@ class DiaristasEmbed:
         left.pack(side="left", fill="y", padx=(0, 30))
 
         # Busca
-        ttk.Label(left, text="Buscar", background=CORES['bg_card']).pack(anchor="w")
+        ttk.Label(left, text="🔍Buscar:", background=CORES['bg_card']).pack(anchor="w")
         self.entry_busca = ttk.Entry(left)
         self.entry_busca.pack(fill="x", pady=(0, 10))
         self.entry_busca.bind("<KeyRelease>", self.filtrar)
