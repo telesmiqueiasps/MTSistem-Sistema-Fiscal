@@ -348,15 +348,20 @@ class TelaEmitirDiaria:
                 "cpf": cpf,
                 "centro": centro,
                 "qtd_diarias": qtd_diarias,
+                "vlr_unitario": valor_unit,
                 "vlr_diaria_hora": vlr_diaria_hora,
                 "vlr_horas_extras": vlr_horas_extras,
                 "valor_total": valor_total,
                 "descricao": descricao,
+                "data_emissao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "tipo_diaria": tipo_diaria
             }
 
+            messagebox.showinfo("Sucesso", "Diária gerada com sucesso!")
             # ⬇️ Usa o root principal
-            TelaReciboDiaria(self.parent, dados_recibo)
+            recibo = TelaReciboDiaria(self.parent, dados_recibo)
+            recibo.janela.lift()
+            recibo.janela.focus_force()
 
             # Agora sim pode fechar a janela de emissão
             self.janela.destroy()
