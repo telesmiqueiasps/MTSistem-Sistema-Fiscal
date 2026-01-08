@@ -165,8 +165,10 @@ class ExtratorFiscalPDFAppEmbed:
             "Fornecedor": None,
             "Data de Emissao": None,
             "Pedido": None,
-            "Quantidade": 0.0
+            "Quantidade": 0.0,
+            "Despesa Acessoria": 0.0
         }
+
 
         try:
             with pdfplumber.open(caminho_pdf) as pdf:
@@ -194,6 +196,12 @@ class ExtratorFiscalPDFAppEmbed:
                                 qtd = float(numeros[0].replace(".", "").replace(",", "."))
                                 nota_atual["Quantidade"] += qtd
 
+                        if re.search(r"Despesa\s+Acess[oó]ria", linha, re.IGNORECASE):
+                            valor_match = re.search(r"\d{1,3}(?:\.\d{3})*,\d{2}", linha)
+                            if valor_match:
+                                nota_atual["Despesa Acessoria"] = float(
+                                    valor_match.group().replace(".", "").replace(",", ".")
+                                )
 
 
                         pedido_match = re.search(r"\b(\d{6})/\d{2}\b", linha)
@@ -202,7 +210,15 @@ class ExtratorFiscalPDFAppEmbed:
 
                         if linha.startswith("TOTAL DA NOTA:"):
                             numero_match = re.search(r"/\s*(\d+)", linha)
-                            valor = float(linha.split()[-1].replace(".", "").replace(",", "."))
+
+                            valores = re.findall(r"\d{1,3}(?:\.\d{3})*,\d{2}", linha)
+
+                            if len(valores) >= 2:
+                                total = float(valores[-1].replace(".", "").replace(",", "."))
+                                despesa_acessoria = float(valores[-2].replace(".", "").replace(",", "."))
+                            else:
+                                total = 0.0
+                                despesa_acessoria = 0.0
 
                             dados.append({
                                 "Numero": numero_match.group(1) if numero_match else None,
@@ -210,15 +226,19 @@ class ExtratorFiscalPDFAppEmbed:
                                 "Data de Emissao": nota_atual["Data de Emissao"],
                                 "Fornecedor": nota_atual["Fornecedor"],
                                 "Quantidade": nota_atual["Quantidade"],
-                                "Valor": valor
+                                "Despesa Acessoria": despesa_acessoria,
+                                "Valor": total
                             })
 
                             nota_atual = {
                                 "Fornecedor": None,
                                 "Data de Emissao": None,
                                 "Pedido": None,
-                                "Quantidade": 0.0
+                                "Quantidade": 0.0,
+                                "Despesa Acessoria": 0.0
                             }
+
+
 
             if not dados:
                 messagebox.showwarning("Aviso", "Nenhuma nota encontrada no arquivo PDF.")

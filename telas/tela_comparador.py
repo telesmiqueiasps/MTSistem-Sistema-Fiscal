@@ -15,6 +15,8 @@ class ComparadorNotasEmbed:
     def __init__(self, parent_frame, sistema_fiscal):
         self.parent_frame = parent_frame
         self.sistema_fiscal = sistema_fiscal
+        self.sefaz = None
+        self.sistema = None
         self.arquivo_pdf = None
         self.criar_interface()
    
@@ -227,64 +229,173 @@ class ComparadorNotasEmbed:
                 text="⏳ Processando arquivos...",
                 foreground=CORES['text_light']
             )
-            self.janela.update()
-            
+            self.parent_frame.update_idletasks()
+
+            # Ler arquivos
             sefaz = pd.read_excel(self.sefaz)
             sistema = pd.read_excel(self.sistema)
 
-            # ===== NORMALIZAÇÃO (USO INTERNO) =====
+            # ===== VERIFICAR COLUNAS =====
+            print("\n=== DEBUG: COLUNAS ENCONTRADAS ===")
+            print(f"SEFAZ colunas: {sefaz.columns.tolist()}")
+            print(f"Sistema colunas: {sistema.columns.tolist()}")
+
+            # ===== NORMALIZAÇÃO =====
             sefaz_aux = sefaz.copy()
             sistema_aux = sistema.copy()
 
+            # ===== NORMALIZAR NÚMERO =====
+            # Verificar qual coluna existe no SEFAZ
+            col_numero_sefaz = None
+            for col in ['Número', 'Numero', 'número', 'numero']:
+                if col in sefaz_aux.columns:
+                    col_numero_sefaz = col
+                    break
+            
+            if not col_numero_sefaz:
+                raise ValueError(f"Coluna de número não encontrada no SEFAZ. Colunas disponíveis: {sefaz_aux.columns.tolist()}")
+
             sefaz_aux["numero"] = (
-                sefaz_aux["Número"]
+                sefaz_aux[col_numero_sefaz]
                 .astype(str)
                 .str.strip()
                 .str.replace(r"\.0$", "", regex=True)
                 .str.lstrip("0")
             )
 
-            sefaz_aux["data"] = pd.to_datetime(
-                sefaz_aux["Data de Emissão"], errors="coerce"
-            ).dt.date
-
-            sefaz_aux["valor"] = pd.to_numeric(
-                sefaz_aux["Valor Total"], errors="coerce"
-            ).round(2)
+            # Verificar qual coluna existe no Sistema
+            col_numero_sistema = None
+            for col in ['Numero', 'Número', 'numero', 'número']:
+                if col in sistema_aux.columns:
+                    col_numero_sistema = col
+                    break
+            
+            if not col_numero_sistema:
+                raise ValueError(f"Coluna de número não encontrada no Sistema. Colunas disponíveis: {sistema_aux.columns.tolist()}")
 
             sistema_aux["numero"] = (
-                sistema_aux["Numero"]
+                sistema_aux[col_numero_sistema]
                 .astype(str)
                 .str.strip()
                 .str.replace(r"\.0$", "", regex=True)
                 .str.lstrip("0")
             )
 
-            sistema_aux["data"] = pd.to_datetime(
-                sistema_aux["Data de Emissao"], errors="coerce"
-            ).dt.date
+            # ===== NORMALIZAR VALOR =====
+            def limpar_valor_br(valor):
+                """Converte valor brasileiro (R$ 19.454,00) para float"""
+                if pd.isna(valor):
+                    return 0.0
+                valor_str = str(valor).strip()
+                # Remove R$ e espaços
+                valor_str = valor_str.replace("R$", "").strip()
+                # Remove espaços em branco
+                valor_str = valor_str.replace(" ", "")
+                # Substitui vírgula por ponto ANTES de remover pontos dos milhares
+                valor_str = valor_str.replace(",", ".")
+                # Agora remove TODOS os pontos EXCETO o último (que é o decimal)
+                partes = valor_str.split(".")
+                if len(partes) > 1:
+                    # Junta tudo antes do último ponto + último ponto + último valor
+                    valor_str = "".join(partes[:-1]) + "." + partes[-1]
+                try:
+                    return float(valor_str)
+                except:
+                    return 0.0
+
+            # Verificar coluna de valor SEFAZ
+            col_valor_sefaz = None
+            for col in ['Valor Total', 'Valor', 'valor', 'valor total']:
+                if col in sefaz_aux.columns:
+                    col_valor_sefaz = col
+                    break
+            
+            if not col_valor_sefaz:
+                raise ValueError(f"Coluna de valor não encontrada no SEFAZ. Colunas disponíveis: {sefaz_aux.columns.tolist()}")
+
+            sefaz_aux["valor"] = sefaz_aux[col_valor_sefaz].apply(limpar_valor_br).round(2)
+
+            # Verificar coluna de valor Sistema
+            col_valor_sistema = None
+            for col in ['Valor', 'valor', 'Valor Total', 'valor total']:
+                if col in sistema_aux.columns:
+                    col_valor_sistema = col
+                    break
+            
+            if not col_valor_sistema:
+                raise ValueError(f"Coluna de valor não encontrada no Sistema. Colunas disponíveis: {sistema_aux.columns.tolist()}")
 
             sistema_aux["valor"] = pd.to_numeric(
-                sistema_aux["Valor"], errors="coerce"
-            ).round(2)
+                sistema_aux[col_valor_sistema], errors="coerce"
+            ).fillna(0.0).round(2)
 
-            # ===== CHAVES INTERNAS =====
-            sefaz_aux["chave"] = (
-                sefaz_aux["numero"] + "|" +
-                sefaz_aux["data"].astype(str) + "|" +
-                sefaz_aux["valor"].astype(str)
-            )
+            # Valor padronizado (string)
+            sefaz_aux["valor_str"] = sefaz_aux["valor"].apply(lambda x: f"{x:.2f}")
+            sistema_aux["valor_str"] = sistema_aux["valor"].apply(lambda x: f"{x:.2f}")
 
-            sistema_chaves = set(
-                sistema_aux["numero"] + "|" +
-                sistema_aux["data"].astype(str) + "|" +
-                sistema_aux["valor"].astype(str)
-            )
+            # ===== DEBUG: PRIMEIRAS LINHAS =====
+            print("\n=== DEBUG: PRIMEIRAS 3 LINHAS PROCESSADAS ===")
+            print("\nSEFAZ:")
+            print(sefaz_aux[["numero", "valor", "valor_str"]].head(3))
+            print("\nSISTEMA:")
+            print(sistema_aux[["numero", "valor", "valor_str"]].head(3))
+
+            # ===== CNPJ OPCIONAL =====
+            def normalizar_cnpj(df, coluna):
+                if coluna in df.columns:
+                    return (
+                        df[coluna]
+                        .astype(str)
+                        .str.replace(r"\D", "", regex=True)
+                        .str.zfill(14)
+                    )
+                return None
+
+            sefaz_cnpj = normalizar_cnpj(sefaz_aux, "CNPJ")
+            sistema_cnpj = normalizar_cnpj(sistema_aux, "CNPJ")
+
+            # ===== CHAVES =====
+            if sefaz_cnpj is not None and sistema_cnpj is not None:
+                sefaz_aux["chave"] = (
+                    sefaz_aux["numero"] + "|" +
+                    sefaz_cnpj + "|" +
+                    sefaz_aux["valor_str"]
+                )
+
+                sistema_chaves = set(
+                    sistema_aux["numero"] + "|" +
+                    sistema_cnpj + "|" +
+                    sistema_aux["valor_str"]
+                )
+            else:
+                sefaz_aux["chave"] = (
+                    sefaz_aux["numero"] + "|" +
+                    sefaz_aux["valor_str"]
+                )
+
+                sistema_chaves = set(
+                    sistema_aux["numero"] + "|" +
+                    sistema_aux["valor_str"]
+                )
+
+            # ===== DEBUG: CHAVES =====
+            print("\n=== DEBUG: CHAVES GERADAS ===")
+            print(f"\nPrimeiras 3 chaves SEFAZ:")
+            for chave in list(sefaz_aux["chave"].head(3)):
+                print(f"  '{chave}'")
+            
+            print(f"\nTodas as chaves SISTEMA ({len(sistema_chaves)} total):")
+            for chave in list(sistema_chaves):
+                print(f"  '{chave}'")
 
             # ===== STATUS =====
             sefaz["Status"] = sefaz_aux["chave"].apply(
                 lambda x: "LANÇADO" if x in sistema_chaves else "NÃO LANÇADO"
             )
+
+            # ===== DEBUG: RESULTADO =====
+            print("\n=== DEBUG: RESULTADO DA COMPARAÇÃO ===")
+            print(sefaz[["Número" if "Número" in sefaz.columns else col_numero_sefaz, "Status"]].head(10))
 
             # ===== EXPORTAÇÃO =====
             saida = filedialog.asksaveasfilename(
@@ -292,17 +403,17 @@ class ComparadorNotasEmbed:
                 defaultextension=".xlsx",
                 filetypes=[("Arquivo Excel", "*.xlsx")]
             )
-            
+
             if not saida:
                 self.status_label.config(text="")
                 return
-            
+
             self.status_label.config(text="💾 Salvando resultado...")
-            self.janela.update()
-            
+            self.parent_frame.update_idletasks()
+
             sefaz.to_excel(saida, index=False)
 
-            # ===== FORMATAÇÃO NO EXCEL =====
+            # ===== FORMATAÇÃO =====
             wb = load_workbook(saida)
             ws = wb.active
 
@@ -320,31 +431,26 @@ class ComparadorNotasEmbed:
 
             wb.save(saida)
 
-            self.status_label.config(
-                text="✅ Comparação concluída!",
-                foreground=CORES['success']
-            )
-
-            
-            # Calcular estatísticas
+            # ===== ESTATÍSTICAS =====
             total = len(sefaz)
             lancados = len(sefaz[sefaz["Status"] == "LANÇADO"])
             nao_lancados = total - lancados
-            
-            self.status_label.config(text="")
-            
+
             messagebox.showinfo(
                 "✓ Comparação Concluída",
                 f"Resultado exportado com sucesso!\n\n"
-                f"Estatísticas:\n"
-                f"• Total de notas: {total}\n"
-                f"• Lançadas: {lancados} ({lancados/total*100:.1f}%)\n"
-                f"• Não lançadas: {nao_lancados} ({nao_lancados/total*100:.1f}%)\n\n"
-                f"Arquivo salvo em:\n{os.path.basename(saida)}"
+                f"Total de notas: {total}\n"
+                f"Lançadas: {lancados}\n"
+                f"Não lançadas: {nao_lancados}"
             )
-            
+
+            self.status_label.config(text="")
+
         except Exception as e:
             self.status_label.config(text="")
+            import traceback
+            erro_completo = traceback.format_exc()
+            print(f"\n=== ERRO COMPLETO ===\n{erro_completo}")
             messagebox.showerror(
                 "Erro no Processamento",
                 f"Ocorreu um erro ao comparar os arquivos:\n\n{str(e)}"
