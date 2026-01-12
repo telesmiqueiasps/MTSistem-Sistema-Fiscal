@@ -229,17 +229,18 @@ class TriagemSPEDEmbed:
         self.progress_label.config(text="Processando arquivos SPED...")
         self.progress.pack(fill="x")
         self.progress.start(10)
-        self.janela.update()
+        self.parent_frame.update_idletasks()
+
         
         try:
             nf, cte = self.extrair_chaves(self.entry_sped.get())
             
             self.progress_label.config(text=f"Mesclando {len(nf)} NF-e encontradas...")
-            self.janela.update()
+            self.parent_frame.update_idletasks()
             self.mesclar(nf, self.entry_pdfs.get(), os.path.join(self.entry_saida.get(), "NFe_unico.pdf"))
             
             self.progress_label.config(text=f"Mesclando {len(cte)} CT-e encontradas...")
-            self.janela.update()
+            self.parent_frame.update_idletasks()
             self.mesclar(cte, self.entry_pdfs.get(), os.path.join(self.entry_saida.get(), "CTe_unico.pdf"))
             
             self.progress.stop()

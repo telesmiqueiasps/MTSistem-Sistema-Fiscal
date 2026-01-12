@@ -19,3 +19,5 @@ Name: "{commondesktop}\MTSistem"; Filename: "{app}\MTSistem.exe"
 
 [Run]
 Filename: "{app}\MTSistem.exe"; Description: "Executar MTSistem"; Flags: nowait postinstall skipifsilent
+
+
