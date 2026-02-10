@@ -4,6 +4,7 @@ from telas.tela_login import TelaLogin
 from telas.tela_inicial import SistemaFiscal
 
 
+
 def abrir_login():
     root = tk.Tk()
     TelaLogin(root, abrir_sistema)
@@ -25,4 +26,4 @@ def abrir_sistema(usuario_id, usuario_nome):
 
 if __name__ == "__main__":
     abrir_login()
-
+    

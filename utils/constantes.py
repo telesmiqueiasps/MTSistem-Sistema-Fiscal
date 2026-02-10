@@ -12,6 +12,7 @@ MODULOS = {
     "abrir_diaristas": "Cadastro de Diaristas",
     "abrir_centros_custo": "Centros de Custo",
     "abrir_diarias": "Emissor de Diárias",
+    'abrir_producao': "Controle de Produção",
 }
 
 CORES = {

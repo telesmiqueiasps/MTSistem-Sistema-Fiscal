@@ -78,6 +78,11 @@ class SistemaFiscal:
         self.limpar_content_area()
         DiariasEmitidasEmbed(self.content_area, self)
 
+    def abrir_producao(self):
+        from telas.tela_producoes import ProducoesPrincipalEmbed
+        self.limpar_content_area()
+        ProducoesPrincipalEmbed(self.content_area, self)
+
     def voltar_home(self):
         self.limpar_content_area()
         self.mostrar_home()
@@ -224,6 +229,8 @@ class SistemaFiscal:
         if is_admin or "abrir_diarias" in permissoes:
             self.criar_menu_item(menu_frame, "Emissor de Diárias", self.abrir_diarias, icone="diarias.png")
 
+        if is_admin or "abrir_producao" in permissoes:
+            self.criar_menu_item(menu_frame, "Controle de Produção", self.abrir_producao, icone="producao.png")
         # Separador antes da administração
         if is_admin:
 
