@@ -1,6 +1,6 @@
 import os
 
-VERSAO_ATUAL = "1.0"
+VERSAO_ATUAL = "1.1"
 CAMINHO_EXE_ATUALIZADO = r"T:\MTSistem\app\MTSistem.exe"
 
 
@@ -12,11 +12,13 @@ MODULOS = {
     "abrir_diaristas": "Cadastro de Diaristas",
     "abrir_centros_custo": "Centros de Custo",
     "abrir_diarias": "Emissor de Diárias",
+    "abrir_servicos": "Emissor de Serviços",
     'abrir_producao': "Controle de Produção",
 }
 
 CORES = {
     'bg_card_hover': '#F5F7FA',
+    'bg_hover': '#F5F7FA',
     'primary': '#2563eb',
     'primary_hover': '#1d4ed8',
     'secondary': '#64748b',

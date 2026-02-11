@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import ttk, messagebox
-from utils.constantes import CORES
+from utils.constantes import CORES, VERSAO_ATUAL
 from utils.auxiliares import resource_path, configurar_estilo, sistema_esta_desatualizado, atualizacao_liberada, executar_atualizacao
 from dao.usuario_dao import UsuarioDAO
 from PIL import Image, ImageTk
@@ -78,6 +78,11 @@ class SistemaFiscal:
         self.limpar_content_area()
         DiariasEmitidasEmbed(self.content_area, self)
 
+    def abrir_servicos(self):
+        from telas.tela_servicos import ServicosEmbed
+        self.limpar_content_area()
+        ServicosEmbed(self.content_area, self)    
+
     def abrir_producao(self):
         from telas.tela_producoes import ProducoesPrincipalEmbed
         self.limpar_content_area()
@@ -135,7 +140,7 @@ class SistemaFiscal:
 
         tk.Label(
             logo_frame,
-            text="MT Sistem",
+            text="MT Sistem - Versão " + VERSAO_ATUAL,
             font=('Segoe UI', 9),
             bg=CORES['primary'],
             fg='white'
@@ -228,6 +233,9 @@ class SistemaFiscal:
 
         if is_admin or "abrir_diarias" in permissoes:
             self.criar_menu_item(menu_frame, "Emissor de Diárias", self.abrir_diarias, icone="diarias.png")
+
+        if is_admin or "abrir_servicos" in permissoes:
+            self.criar_menu_item(menu_frame, "Emissor de Serviços", self.abrir_servicos, icone="servicos.png")    
 
         if is_admin or "abrir_producao" in permissoes:
             self.criar_menu_item(menu_frame, "Controle de Produção", self.abrir_producao, icone="producao.png")
@@ -470,7 +478,7 @@ class SistemaFiscal:
         
         ttk.Label(
             footer,
-            text="v1.0 • MTSistem - Desenvolvido e licenciado por Miquéias Teles",
+            text="MTSistem - Desenvolvido e licenciado por Miquéias Teles • Versão " + VERSAO_ATUAL,
             font=('Segoe UI', 8),
             background=CORES['bg_main'],
             foreground=CORES['text_light']

@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from PIL import Image, ImageTk
 from dao.usuario_dao import UsuarioDAO
-from utils.constantes import CORES
+from utils.constantes import CORES, VERSAO_ATUAL
 from utils.auxiliares import resource_path, configurar_estilo
 
 class TelaLogin:
@@ -96,7 +96,7 @@ class TelaLogin:
         # =========================
         ttk.Label(
             main_frame,
-            text="© MTSistem • Desenvolvido por Miquéias Teles",
+            text="© MTSistem • Desenvolvido por Miquéias Teles - Versão " + VERSAO_ATUAL,
             font=('Segoe UI', 8),
             foreground=CORES['text_light'],
             background=CORES['bg_main']
