@@ -84,17 +84,33 @@ class DiariaDAO:
         return cur.lastrowid
 
 
-    def listar_diarias(self, filtro=""):
+    def listar_diarias(self, filtro_nome="", data_inicio=None, data_fim=None):
         cur = self.conn.cursor()
 
         sql = """
-            SELECT id, diarista, cpf, qtd_diarias, vlr_total, descricao, data_emissao, caminho_arquivo
+            SELECT id, diarista, cpf, qtd_diarias, vlr_total,
+                descricao, data_emissao, caminho_arquivo
             FROM diarias
-            WHERE diarista LIKE ? OR cpf LIKE ?
-            ORDER BY id DESC
+            WHERE 1=1
         """
 
-        cur.execute(sql, (f"%{filtro}%", f"%{filtro}%"))
+        params = []
+
+        # 🔎 Filtro por nome ou CPF
+        if filtro_nome:
+            sql += " AND (diarista LIKE ? OR cpf LIKE ?)"
+            params.append(f"%{filtro_nome}%")
+            params.append(f"%{filtro_nome}%")
+
+        # 📅 Filtro por período
+        if data_inicio and data_fim:
+            sql += " AND date(data_emissao) BETWEEN date(?) AND date(?)"
+            params.append(data_inicio)
+            params.append(data_fim)
+
+        sql += " ORDER BY id DESC"
+
+        cur.execute(sql, params)
 
         dados = []
         for r in cur.fetchall():
@@ -110,6 +126,7 @@ class DiariaDAO:
             })
 
         return dados
+
 
 
     
@@ -158,3 +175,123 @@ class DiariaDAO:
             "tipo_diaria": r[10],
             "data_emissao": r[11]
         }
+
+    # =========================
+    # RELATÓRIOS
+    # =========================
+
+    def relatorio_por_diarista(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna total agrupado por diarista no período
+        Retorna: [(diarista, cpf, qtd_lancamentos, total_diarias, total_valor)]
+        """
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                diarista,
+                cpf,
+                COUNT(id)             AS qtd_lancamentos,
+                SUM(qtd_diarias)      AS total_diarias,
+                SUM(vlr_total)        AS total_valor
+            FROM diarias
+            WHERE date(data_emissao) BETWEEN date(?) AND date(?)
+            GROUP BY diarista, cpf
+            ORDER BY total_valor DESC
+            """,
+            (data_inicio, data_fim)
+        )
+
+        return cursor.fetchall()
+
+
+    def relatorio_resumo_periodo(self, data_inicio: str, data_fim: str) -> tuple:
+        """
+        Retorna resumo geral do período
+        Retorna: (qtd_lancamentos, total_diarias, total_valor)
+        """
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(id),
+                SUM(qtd_diarias),
+                SUM(vlr_total)
+            FROM diarias
+            WHERE date(data_emissao) BETWEEN date(?) AND date(?)
+            """,
+            (data_inicio, data_fim)
+        )
+
+        return cursor.fetchone()
+    
+    def relatorio_geral(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna todas as diárias detalhadas no período
+        Retorna:
+        [(data, diarista, cpf, qtd_diarias, valor, descricao)]
+        """
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                data_emissao,
+                diarista,
+                cpf,
+                qtd_diarias,
+                vlr_total,
+                descricao
+            FROM diarias
+            WHERE date(data_emissao) BETWEEN date(?) AND date(?)
+            ORDER BY date(data_emissao) DESC
+            """,
+            (data_inicio, data_fim)
+        )
+
+        return cursor.fetchall()
+
+
+    def relatorio_por_mes(self, data_inicio, data_fim):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT
+                strftime('%m/%Y', data_emissao) as mes,
+                SUM(qtd_diarias),
+                SUM(vlr_total)
+            FROM diarias
+            WHERE date(data_emissao) BETWEEN date(?) AND date(?)
+            GROUP BY strftime('%Y-%m', data_emissao)
+            ORDER BY strftime('%Y-%m', data_emissao)
+        """, (data_inicio, data_fim))
+        return cursor.fetchall()
+
+    def relatorio_por_centro_custo(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna total agrupado por centro de custo no período
+        Retorna: [(centro_custo, qtd_lancamentos, total_diarias, total_valor)]
+        """
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                centro_custo,
+                COUNT(id)            AS qtd_lancamentos,
+                SUM(qtd_diarias)     AS total_diarias,
+                SUM(vlr_total)       AS total_valor
+            FROM diarias
+            WHERE date(data_emissao) BETWEEN date(?) AND date(?)
+            GROUP BY centro_custo
+            ORDER BY total_valor DESC
+            """,
+            (data_inicio, data_fim)
+        )
+
+        return cursor.fetchall()

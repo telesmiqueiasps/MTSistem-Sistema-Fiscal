@@ -97,6 +97,13 @@ class ServicosEmbed:
             style="Secondary.TButton",
             command=self.carregar_servicos
         ).pack(side="left", padx=5)
+
+        ttk.Button(
+            right_header,
+            text="📊 Relatório",
+            style="Add.TButton",
+            command=self.abrir_relatorio
+        ).pack(side="left", padx=5)
         
         # Card principal
         card = ttk.Frame(main_frame, style="Card.TFrame", padding=20)
@@ -444,6 +451,10 @@ class ServicosEmbed:
         for w in [linha] + labels:
             w.bind("<Enter>", on_enter)
             w.bind("<Leave>", on_leave)
+
+    def abrir_relatorio(self):
+        from telas.tela_relatorio_servicos import TelaRelatorioServicos
+        TelaRelatorioServicos(self.parent_frame)
     
     def novo_servico(self):
         TelaNovoServico(self.parent_frame, self.carregar_servicos)

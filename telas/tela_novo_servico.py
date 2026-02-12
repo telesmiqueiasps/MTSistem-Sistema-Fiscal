@@ -270,49 +270,43 @@ class TelaNovoServico:
 
     
     def carregar_dados_servico(self):
-        """Carrega dados do serviço para edição"""
+        """Carrega dados do serviço para edição"""       
         servico = self.dao.buscar(self.servico_id)
         if not servico:
             messagebox.showerror("Erro", "Serviço não encontrado!")
             self.janela.destroy()
             return
-        
-        # servico: (id, data_servico, diarista_nome, diarista_cpf, centro_custo, 
-        #           valor, descricao, observacoes, diarista_id, centro_custo_id)
-        
-        # Define diarista
+
         diarista_texto = f"{servico[2]} - CPF: {servico[3]}"
-        if diarista_texto in self.diaristas_dict:
-            self.combo_diarista.set(diarista_texto)
         
-        # Define data
+        self.entry_diarista.delete(0, tk.END)
+        self.entry_diarista.insert(0, diarista_texto)
+
+
         try:
             data_obj = datetime.strptime(servico[1], '%Y-%m-%d')
             self.date_servico.set_date(data_obj)
         except:
             pass
-        
-        # Define centro de custo
+
+
         if servico[4] in self.centros_dict:
             self.combo_centro_custo.set(servico[4])
-        
-        # Define valor
+
+
         self.entry_valor.delete(0, tk.END)
         self.entry_valor.insert(0, f"{servico[5]:.2f}")
-        
-        # Define descrição
+
+
         self.text_descricao.delete("1.0", "end")
         self.text_descricao.insert("1.0", servico[6])
-        
-        # Define observações
-        if servico[7]:
+
+        if hasattr(self, "text_observacoes") and servico[7]:
             self.text_observacoes.delete("1.0", "end")
             self.text_observacoes.insert("1.0", servico[7])
+
     
     def salvar(self):
-        # =========================
-        # VALIDAR DIARISTA
-        # =========================
         nome_digitado = self.entry_diarista.get().strip()
 
         if not nome_digitado:
@@ -334,9 +328,6 @@ class TelaNovoServico:
             return
 
 
-        # =========================
-        # VALIDAR CENTRO DE CUSTO
-        # =========================
         centro_texto = self.combo_centro_custo.get().strip()
 
         if not centro_texto:
@@ -352,9 +343,6 @@ class TelaNovoServico:
         centro_custo_id = self.centros_dict[centro_texto]
 
 
-        # =========================
-        # VALIDAR VALOR
-        # =========================
         try:
             valor = float(self.entry_valor.get().replace(',', '.'))
             if valor <= 0:
@@ -365,9 +353,6 @@ class TelaNovoServico:
             return
 
 
-        # =========================
-        # VALIDAR DESCRIÇÃO
-        # =========================
         descricao = self.text_descricao.get("1.0", "end-1c").strip()
 
         if not descricao:
@@ -375,17 +360,9 @@ class TelaNovoServico:
             self.text_descricao.focus()
             return
 
-
-        # =========================
-        # COLETAR DEMAIS DADOS
-        # =========================
         data_servico = self.date_servico.get_date().strftime('%Y-%m-%d')
         
 
-
-        # =========================
-        # SALVAR OU ATUALIZAR
-        # =========================
         if self.servico_id:
             sucesso = self.dao.atualizar(
                 self.servico_id,

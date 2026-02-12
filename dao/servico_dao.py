@@ -146,3 +146,77 @@ class ServicoDAO:
         cursor.execute(query, params)
         result = cursor.fetchone()
         return result[0] if result else 0.0
+    
+
+    # ==================== RELATÓRIOS ====================
+    # Adicione esses métodos dentro da classe ServicoDAO
+
+    def relatorio_por_centro_custo(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna total pago agrupado por centro de custo no período
+        Retorna: [(centro, qtd_servicos, total_valor), ...]
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                cc.centro,
+                COUNT(s.id)       AS qtd_servicos,
+                SUM(s.valor)      AS total_valor
+            FROM servicos s
+            JOIN centros_custo cc ON cc.id = s.centro_custo_id
+            WHERE s.data_servico BETWEEN ? AND ?
+            GROUP BY cc.id, cc.centro
+            ORDER BY total_valor DESC
+            """,
+            (data_inicio, data_fim)
+        )
+        return cursor.fetchall()
+
+    def relatorio_por_diarista(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna total pago agrupado por diarista no período
+        Retorna: [(nome, cpf, qtd_servicos, total_valor), ...]
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                d.nome,
+                d.cpf,
+                COUNT(s.id)       AS qtd_servicos,
+                SUM(s.valor)      AS total_valor
+            FROM servicos s
+            JOIN diaristas d ON d.id = s.diarista_id
+            WHERE s.data_servico BETWEEN ? AND ?
+            GROUP BY d.id, d.nome, d.cpf
+            ORDER BY total_valor DESC
+            """,
+            (data_inicio, data_fim)
+        )
+        return cursor.fetchall()
+
+    def relatorio_geral(self, data_inicio: str, data_fim: str) -> list:
+        """
+        Retorna todos os serviços detalhados no período para exportação
+        Retorna: [(data, diarista, cpf, centro, descricao, valor), ...]
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                s.data_servico,
+                d.nome,
+                d.cpf,
+                cc.centro,
+                s.descricao,
+                s.valor
+            FROM servicos s
+            JOIN diaristas d    ON d.id  = s.diarista_id
+            JOIN centros_custo cc ON cc.id = s.centro_custo_id
+            WHERE s.data_servico BETWEEN ? AND ?
+            ORDER BY s.data_servico DESC
+            """,
+            (data_inicio, data_fim)
+        )
+        return cursor.fetchall()

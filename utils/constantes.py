@@ -25,6 +25,7 @@ CORES = {
     'success': '#10b981',
     'success_hover': "#057e56",
     'danger': '#ef4444',
+    'warning': '#f59e0b',
     'danger_hover': '#dc2626',
     'bg_main': '#f8fafc',
     'bg_card': '#ffffff',

@@ -6,6 +6,7 @@ from telas.tela_emitir_diaria import TelaEmitirDiaria
 from telas.tela_recibo_diaria import TelaReciboDiaria
 from utils.auxiliares import CORES, resource_path
 from PIL import Image, ImageTk 
+from datetime import datetime, timedelta
 
 
 class DiariasEmitidasEmbed:
@@ -74,10 +75,11 @@ class DiariasEmitidasEmbed:
 
         ttk.Button(
             buttons_frame,
-            text="➕ Emitir Diária",
+            text="📊 Relatório",
             style="Add.TButton",
-            command=self.abrir_emissao
+            command=self.abrir_relatorio
         ).pack(pady=5, padx=5, side="right")
+
 
         ttk.Button(
             buttons_frame,
@@ -88,9 +90,9 @@ class DiariasEmitidasEmbed:
 
         ttk.Button(
             buttons_frame,
-            text="👁️Visualizar",
+            text="➕ Emitir Diária",
             style="Primary.TButton",
-            command=self.abrir_recibo
+            command=self.abrir_emissao
         ).pack(pady=5, padx=5, side="right")
 
         # Botão parametros
@@ -132,43 +134,160 @@ class DiariasEmitidasEmbed:
         busca.pack(fill="x", pady=10)
         busca.bind("<KeyRelease>", lambda e: self.atualizar_lista())
 
+        # 📅 Filtro por período
+        ttk.Label(
+            main_frame,
+            text="📅 Período:",
+            font=('Segoe UI', 9),
+            background=CORES['bg_main'],
+            foreground=CORES['text_dark']
+        ).pack(anchor="w")
+
+        self.combo_periodo = ttk.Combobox(
+            main_frame,
+            values=["Todos", "Hoje", "Última Semana", "Último Mês"],
+            state="readonly",
+            width=20
+        )
+        self.combo_periodo.set("Todos")
+        self.combo_periodo.pack(fill="x", pady=(0, 10))
+
+        self.combo_periodo.bind("<<ComboboxSelected>>", lambda e: self.atualizar_lista())
+
+
+        # =====================================================
+        # 🎨 Estilo do Treeview (Diárias)
+        # =====================================================
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure(
+            "Diarias.Treeview",
+            background="white",
+            foreground=CORES['text_dark'],
+            rowheight=32,
+            fieldbackground="white",
+            font=("Segoe UI", 9),
+            borderwidth=0
+        )
+
+        style.configure(
+            "Diarias.Treeview.Heading",
+            background=CORES['primary'],
+            foreground="white",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padding=(10, 8)
+        )
+
+        style.map(
+            "Diarias.Treeview",
+            background=[("selected", CORES['secondary'])],
+            foreground=[("selected", "white")]
+        )
+
+        style.map(
+            "Diarias.Treeview.Heading",
+            background=[("active", CORES['primary'])]
+        )
+
+        scroll_y = ttk.Scrollbar(main_frame, orient="vertical")
+        scroll_y.pack(side="right", fill="y")
+
+        scroll_x = ttk.Scrollbar(main_frame, orient="horizontal")
+        scroll_x.pack(side="bottom", fill="x")
+
+
         # 📊 Tabela
         self.tree = ttk.Treeview(
             main_frame,
             columns=("nome", "cpf", "qtd_diarias", "valor", "descricao", "data"),
             show="headings",
-            height=15
+            height=15,
+            style="Diarias.Treeview",
+            yscrollcommand=scroll_y.set,
+            xscrollcommand=scroll_x.set
         )
 
+        scroll_y.config(command=self.tree.yview)
+        scroll_x.config(command=self.tree.xview)
+
+
         # Cabeçalhos
-        self.tree.heading("nome", text="Diarista")
-        self.tree.heading("cpf", text="CPF")
-        self.tree.heading("qtd_diarias", text="Qtd. Diárias")
-        self.tree.heading("valor", text="Valor Total")
-        self.tree.heading("descricao", text="Descrição")
-        self.tree.heading("data", text="Data")
+        self.tree.heading("nome", text="Diarista", anchor="w")
+        self.tree.heading("cpf", text="CPF", anchor="center")
+        self.tree.heading("qtd_diarias", text="Qtd. Diárias", anchor="center")
+        self.tree.heading("valor", text="Valor Total", anchor="e")
+        self.tree.heading("descricao", text="Descrição", anchor="w")
+        self.tree.heading("data", text="Data", anchor="center")
+
 
         # Colunas (largura e alinhamento)
-        self.tree.column("nome", width=200, minwidth=200, anchor="w", stretch=False)
-        self.tree.column("cpf", width=100, minwidth=100, anchor="center", stretch=False)
-        self.tree.column("qtd_diarias", width=80, minwidth=80, anchor="center", stretch=False)
-        self.tree.column("valor", width=90, minwidth=90, anchor="e", stretch=False)
-        self.tree.column("data", width=120, minwidth=120, anchor="center", stretch=False)
+        self.tree.column("nome", width=200, minwidth=180, stretch=False)
+        self.tree.column("cpf", width=110, minwidth=100, stretch=False, anchor="center")
+        self.tree.column("qtd_diarias", width=100, minwidth=90, stretch=False, anchor="center")
+        self.tree.column("valor", width=110, minwidth=100, stretch=False, anchor="e")
+        self.tree.column("descricao", width=250, minwidth=150, stretch=True)
+        self.tree.column("data", width=120, minwidth=110, stretch=False, anchor="center")
+
+        #Zebra
+        self.tree.tag_configure("par", background="#f8f9fa")
+        self.tree.tag_configure("impar", background="white")
 
         # Descrição ocupa o espaço restante
         self.tree.column("descricao", width=200, anchor="w", stretch=True)
 
         self.tree.pack(fill="both", expand=True)
 
+        self.tree.bind("<Double-1>", self._duplo_clique)
 
 
+    def _duplo_clique(self, event):
+        item = self.tree.identify_row(event.y)
+        if item:
+            self.tree.selection_set(item)
+            self.abrir_recibo()
+
+    def get_filtro_periodo(self):
+        """Retorna data_inicio e data_fim baseado no período selecionado"""
+        periodo = self.combo_periodo.get()
+        hoje = datetime.now()
+
+        if periodo == "Hoje":
+            data_inicio = hoje.strftime('%Y-%m-%d')
+            data_fim = hoje.strftime('%Y-%m-%d')
+
+        elif periodo == "Última Semana":
+            data_inicio = (hoje - timedelta(days=7)).strftime('%Y-%m-%d')
+            data_fim = hoje.strftime('%Y-%m-%d')
+
+        elif periodo == "Último Mês":
+            data_inicio = (hoje - timedelta(days=30)).strftime('%Y-%m-%d')
+            data_fim = hoje.strftime('%Y-%m-%d')
+
+        else:  # Todos
+            data_inicio = None
+            data_fim = None
+
+        return data_inicio, data_fim
+
+        
     # =====================================================
     def atualizar_lista(self):
-        filtro = self.var_busca.get()
+        filtro_nome = self.var_busca.get().strip()
+        data_inicio, data_fim = self.get_filtro_periodo()
 
         self.tree.delete(*self.tree.get_children())
 
-        for d in self.dao.listar_diarias(filtro):
+        for i, d in enumerate(
+            self.dao.listar_diarias(
+                filtro_nome=filtro_nome,
+                data_inicio=data_inicio,
+                data_fim=data_fim
+            )
+        ):
+            tag_cor = "par" if i % 2 == 0 else "impar"
+
             self.tree.insert(
                 "",
                 "end",
@@ -180,8 +299,11 @@ class DiariasEmitidasEmbed:
                     d["descricao"],
                     d["data_emissao"]
                 ),
-                tags=(str(d["id"]), d["caminho_arquivo"])
+                tags=(tag_cor, str(d["id"]))
             )
+
+
+
 
 
     def abrir_emissao(self):
@@ -199,11 +321,12 @@ class DiariasEmitidasEmbed:
 
         tags = self.tree.item(item, "tags")
 
-        if not tags:
+        if len(tags) < 2:
             messagebox.showerror("Erro", "Identificação da diária não encontrada.")
             return
 
-        id_diaria = tags[0]  # agora só precisamos do ID
+        id_diaria = tags[1]
+
 
         dados = self.dao.buscar_diaria_por_id(id_diaria)
         if not dados:
@@ -254,6 +377,9 @@ class DiariasEmitidasEmbed:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao excluir diária:\n{e}")
 
+    def abrir_relatorio(self):
+        from telas.tela_relatorio_diarias import TelaRelatorioDiarias
+        TelaRelatorioDiarias(self.parent_frame)
 
     def chamar_tela_parametros(self):
         from telas.tela_parametros_diaria import TelaParametrosDiaria
