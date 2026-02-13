@@ -26,6 +26,10 @@ class TelaDetalhesProducao:
         self.dao = ProducaoDAO()
         self.diarista_dao = DiaristaDAO()
         self.recibo_producao_service = ReciboProducaoService(self.dao)
+
+        # Guarda referência aos canvas para unbind correto
+        self._canvas_dias = None
+        self._canvas_totais = None
         
         self.criar_interface()
         self.carregar_dados()
@@ -90,7 +94,7 @@ class TelaDetalhesProducao:
         self.btn_fechar = ttk.Button(
             right_header,
             text="🔒 Fechar Produção",
-            style="Warning.TButton",
+            style="Danger.TButton",
             command=self.fechar_producao
         )
         self.btn_fechar.pack(side="left", padx=5)
@@ -133,9 +137,32 @@ class TelaDetalhesProducao:
         
         self.criar_aba_dias()
         self.criar_aba_totais()
+
+        # Redireciona o scroll para o canvas da aba ativa
+        self.notebook.bind("<<NotebookTabChanged>>", self._atualizar_scroll_ativo)
     
+    def _on_mousewheel(self, event):
+        """Handler único que delega ao canvas da aba atualmente visível."""
+        canvas = self._canvas_ativo()
+        if canvas and canvas.winfo_exists():
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _canvas_ativo(self):
+        """Retorna o canvas da aba selecionada no momento."""
+        try:
+            aba = self.notebook.index(self.notebook.select())
+        except Exception:
+            return None
+        if aba == 0:
+            return self._canvas_dias
+        return self._canvas_totais
+
+    def _atualizar_scroll_ativo(self, event=None):
+        """Chamado quando o usuário troca de aba — nenhuma ação necessária,
+        _canvas_ativo() já resolve dinamicamente."""
+        pass
+
     def criar_aba_dias(self):
-        # Canvas e scrollbar
         canvas = tk.Canvas(
             self.frame_dias,
             bg=CORES['bg_card'],
@@ -155,14 +182,15 @@ class TelaDetalhesProducao:
         
         canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         scrollbar.pack(side="right", fill="y")
-        
-        # Mouse wheel
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Salva referência e registra o bind global UMA única vez aqui
+        self._canvas_dias = canvas
+        canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        # Remove o bind global quando este canvas for destruído
+        canvas.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>"))
     
     def criar_aba_totais(self):
-        # Canvas e scrollbar
         canvas = tk.Canvas(
             self.frame_totais,
             bg=CORES['bg_card'],
@@ -182,11 +210,9 @@ class TelaDetalhesProducao:
         
         canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
         scrollbar.pack(side="right", fill="y")
-        
-        # Mouse wheel
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Salva referência (o bind_all já foi feito em criar_aba_dias)
+        self._canvas_totais = canvas
     
     def carregar_dados(self):
         producao = self.dao.get_producao(self.producao_id)
@@ -209,8 +235,6 @@ class TelaDetalhesProducao:
             self.btn_fechar.pack_forget()
             self.btn_recibo.pack(side="left", padx=5)
 
-
-
         # Atualiza info
         info_texto = f"📅 Início: {formatar_data_br(producao['data_inicio'])}"
         if producao['data_fim']:
@@ -223,7 +247,6 @@ class TelaDetalhesProducao:
         self.carregar_totais_diaristas()
     
     def carregar_dias(self):
-        # Limpa
         for widget in self.scroll_dias.winfo_children():
             widget.destroy()
         
@@ -260,8 +283,6 @@ class TelaDetalhesProducao:
         acoes = tk.Frame(inner, bg='white')
         acoes.pack(side="right")
 
-        
-        # Informações
         tk.Label(
             info,
             text=f"📅 {formatar_data_br(dia['data_producao'])}",
@@ -282,8 +303,6 @@ class TelaDetalhesProducao:
             fg=CORES['text_light']
         ).pack(anchor="w", pady=(3, 0))
 
-        
-        # Botão deletar (só se aberta)
         producao = self.dao.get_producao(self.producao_id)
         if producao['status'] == 'aberta':
             tk.Button(
@@ -301,7 +320,6 @@ class TelaDetalhesProducao:
 
     
     def carregar_totais_diaristas(self):
-        # Limpa
         for widget in self.scroll_totais.winfo_children():
             widget.destroy()
         
@@ -332,18 +350,12 @@ class TelaDetalhesProducao:
         inner = tk.Frame(card, bg='white')
         inner.pack(fill="x", padx=15, pady=12)
 
-        # =========================
-        # Colunas
-        # =========================
         info = tk.Frame(inner, bg='white')
         info.pack(side="left", fill="x", expand=True)
 
         acoes = tk.Frame(inner, bg='white')
         acoes.pack(side="right")
 
-        # =========================
-        # Nome
-        # =========================
         tk.Label(
             info,
             text=total['nome'],
@@ -352,9 +364,6 @@ class TelaDetalhesProducao:
             fg=CORES['text_dark']
         ).pack(anchor="w")
 
-        # =========================
-        # CPF e totais
-        # =========================
         tk.Label(
             info,
             text=(
@@ -367,9 +376,6 @@ class TelaDetalhesProducao:
             fg=CORES['text_light']
         ).pack(anchor="w", pady=(3, 0))
 
-        # =========================
-        # Botão recibo
-        # =========================
         tk.Button(
             acoes,
             text="📄 Recibo",
@@ -415,12 +421,9 @@ class TelaDetalhesProducao:
             )
 
             if not arquivo:
-                return  # usuário cancelou
+                return
 
-            messagebox.showinfo(
-                "Sucesso",
-                "Recibo geral gerado com sucesso!"
-            )
+            messagebox.showinfo("Sucesso", "Recibo geral gerado com sucesso!")
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao gerar recibo: {str(e)}")
@@ -438,10 +441,7 @@ class TelaDetalhesProducao:
             if not arquivo:
                 return
 
-            messagebox.showinfo(
-                "Sucesso",
-                "Recibo individual gerado com sucesso!"
-            )
+            messagebox.showinfo("Sucesso", "Recibo individual gerado com sucesso!")
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao gerar recibo: {str(e)}")

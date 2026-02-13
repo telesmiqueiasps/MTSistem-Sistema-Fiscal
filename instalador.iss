@@ -1,10 +1,10 @@
 [Setup]
 AppName=MTSistem
-AppVersion=1.0
+AppVersion=1.3
 DefaultDirName={pf}\MTSistem
 DefaultGroupName=MTSistem
 OutputDir=installer
-OutputBaseFilename=MTSistem_Setup
+OutputBaseFilename=MTSistem
 Compression=lzma
 SolidCompression=yes
 SetupIconFile=Icones\logo.ico

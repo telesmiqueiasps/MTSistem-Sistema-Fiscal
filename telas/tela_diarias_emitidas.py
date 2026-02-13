@@ -3,7 +3,6 @@ from tkinter import ttk, messagebox
 import os
 from dao.diaria_dao import DiariaDAO
 from telas.tela_emitir_diaria import TelaEmitirDiaria
-from telas.tela_recibo_diaria import TelaReciboDiaria
 from utils.auxiliares import CORES, resource_path
 from PIL import Image, ImageTk 
 from datetime import datetime, timedelta
@@ -304,8 +303,6 @@ class DiariasEmitidasEmbed:
 
 
 
-
-
     def abrir_emissao(self):
         # 🔁 Passa callback para atualizar a lista
         TelaEmitirDiaria(
@@ -315,26 +312,33 @@ class DiariasEmitidasEmbed:
 
     def abrir_recibo(self):
         item = self.tree.focus()
+
         if not item:
             messagebox.showwarning("Atenção", "Selecione uma diária.")
             return
 
         tags = self.tree.item(item, "tags")
 
-        if len(tags) < 2:
+        if not tags:
             messagebox.showerror("Erro", "Identificação da diária não encontrada.")
             return
 
-        id_diaria = tags[1]
-
+        id_diaria = tags[1] if len(tags) > 1 else tags[0]
 
         dados = self.dao.buscar_diaria_por_id(id_diaria)
+
         if not dados:
             messagebox.showerror("Erro", "Não foi possível carregar a diária.")
             return
 
-        from telas.tela_recibo_diaria import TelaReciboDiaria
-        TelaReciboDiaria(self.parent_frame, dados)
+        # 🚀 AGORA CHAMA DIRETO O SERVICE
+        from services.recibo_diaria_service import gerar_pdf_recibo_diaria
+
+        gerar_pdf_recibo_diaria(
+            dados,
+            salvar=False,   # arquivo temporário
+            abrir=True      # já abre automaticamente
+        )
 
 
 

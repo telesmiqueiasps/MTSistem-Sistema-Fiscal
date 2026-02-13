@@ -125,6 +125,20 @@ def configurar_estilo():
     style.map('Danger.TButton',
         background=[('active', CORES['danger_hover'])]
     )
+
+    # Botões amarelo(atenção)
+    style.configure(
+        'Warning.TButton',
+        background=CORES['warning'],
+        foreground='white',
+        borderwidth=0,
+        focuscolor='none',
+        font=('Segoe UI', 10),
+        padding=(20, 10)
+    )
+    style.map('Warning.TButton',
+        background=[('active', CORES['warning_hover'])]
+    )
     
     # Botões secundários
     style.configure(

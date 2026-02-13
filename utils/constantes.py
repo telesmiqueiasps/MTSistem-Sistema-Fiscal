@@ -1,6 +1,6 @@
 import os
 
-VERSAO_ATUAL = "1.1"
+VERSAO_ATUAL = "1.3"
 CAMINHO_EXE_ATUALIZADO = r"T:\MTSistem\app\MTSistem.exe"
 
 
@@ -26,6 +26,7 @@ CORES = {
     'success_hover': "#057e56",
     'danger': '#ef4444',
     'warning': '#f59e0b',
+    'warning_hover': '#e69000',
     'danger_hover': '#dc2626',
     'bg_main': '#f8fafc',
     'bg_card': '#ffffff',

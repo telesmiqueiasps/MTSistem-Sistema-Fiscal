@@ -10,14 +10,21 @@ from utils.constantes import CORES
 from utils.auxiliares import resource_path
 from PIL import Image, ImageTk
 
+
 def formatar_data_br(data):
     if not data:
         return None
-
     if isinstance(data, (datetime, date)):
-        return data.strftime("%d-%m-%Y")
+        return data.strftime("%d/%m/%Y")
+    return datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
 
-    return datetime.strptime(data, "%Y-%m-%d").strftime("%d-%m-%Y")
+
+def _fmt_valor(valor: float) -> str:
+    return (
+        f"R$ {valor:,.2f}"
+        .replace(',', 'X').replace('.', ',').replace('X', '.')
+    )
+
 
 class ServicosEmbed:
     def __init__(self, parent_frame, sistema_fiscal):
@@ -26,459 +33,342 @@ class ServicosEmbed:
         self.dao = ServicoDAO()
         self.diarista_dao = DiaristaDAO()
         self.centro_custo_dao = CentroCustoDAO()
-        
+
+        # cache completo para filtragem local
+        self._servicos_cache = []
+
         self.criar_interface()
         self.carregar_servicos()
-    
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # INTERFACE
+    # ─────────────────────────────────────────────────────────────────────────
+
     def criar_interface(self):
-        # Frame principal
         main_frame = ttk.Frame(self.parent_frame, style='Main.TFrame')
         main_frame.pack(fill="both", expand=True, padx=50, pady=30)
-        
-        # Header
+
+        # ── Header ────────────────────────────────────────────────────────────
         header_frame = ttk.Frame(main_frame, style='Main.TFrame')
         header_frame.pack(fill="x", pady=(0, 20))
-        
-        header_container = ttk.Frame(header_frame, style='Main.TFrame')
-        header_container.pack(fill="x")
-        
-        # Ícone e título
-        left_header = ttk.Frame(header_container, style='Main.TFrame')
+
+        left_header = ttk.Frame(header_frame, style='Main.TFrame')
         left_header.pack(side="left")
-        
-        # ÍCONE DO HEADER
+
         try:
-            caminho_icone = resource_path("Icones/servicos_azul.png")
-            img = Image.open(caminho_icone)
-            img = img.resize((32, 32), Image.LANCZOS)
+            img = Image.open(resource_path("Icones/servicos_azul.png")).resize(
+                (32, 32), Image.LANCZOS)
             self.icon_header = ImageTk.PhotoImage(img)
-            
-            ttk.Label(
-                left_header,
-                image=self.icon_header,
-                background=CORES['bg_main']
-            ).pack(side="left", padx=(0, 15))
-        except:
+            ttk.Label(left_header, image=self.icon_header,
+                      background=CORES['bg_main']).pack(side="left", padx=(0, 15))
+        except Exception:
             pass
-        
+
         title_frame = ttk.Frame(left_header, style='Main.TFrame')
         title_frame.pack(side="left")
-        
-        ttk.Label(
-            title_frame,
-            text="Emissão de Serviços",
-            font=('Segoe UI', 18, 'bold'),
-            background=CORES['bg_main'],
-            foreground=CORES['text_dark']
-        ).pack(anchor="w")
-        
-        ttk.Label(
-            title_frame,
-            text="Registro e emissão de recibos de serviços prestados",
-            font=('Segoe UI', 9),
-            background=CORES['bg_main'],
-            foreground=CORES['text_light']
-        ).pack(anchor="w")
-        
-        # Botões do header
-        right_header = ttk.Frame(header_container, style='Main.TFrame')
-        right_header.pack(side="right")
-        
-        ttk.Button(
-            right_header,
-            text="➕ Novo Serviço",
-            style="Primary.TButton",
-            command=self.novo_servico
-        ).pack(side="left", padx=5)
-        
-        ttk.Button(
-            right_header,
-            text="🔄 Atualizar",
-            style="Secondary.TButton",
-            command=self.carregar_servicos
-        ).pack(side="left", padx=5)
 
-        ttk.Button(
-            right_header,
-            text="📊 Relatório",
-            style="Add.TButton",
-            command=self.abrir_relatorio
-        ).pack(side="left", padx=5)
-        
-        # Card principal
+        ttk.Label(title_frame, text="Emissão de Serviços",
+                  font=('Segoe UI', 18, 'bold'),
+                  background=CORES['bg_main'],
+                  foreground=CORES['text_dark']).pack(anchor="w")
+
+        ttk.Label(title_frame,
+                  text="Registro e emissão de recibos de serviços prestados",
+                  font=('Segoe UI', 9),
+                  background=CORES['bg_main'],
+                  foreground=CORES['text_light']).pack(anchor="w")
+
+        right_header = ttk.Frame(header_frame, style='Main.TFrame')
+        right_header.pack(side="right")
+
+        ttk.Button(right_header, text="➕ Novo Serviço",
+                   style="Primary.TButton",
+                   command=self.novo_servico).pack(side="left", padx=5)
+
+        ttk.Button(right_header, text="🔄 Atualizar",
+                   style="Secondary.TButton",
+                   command=self.carregar_servicos).pack(side="left", padx=5)
+
+        ttk.Button(right_header, text="📊 Relatório",
+                   style="Add.TButton",
+                   command=self.abrir_relatorio).pack(side="left", padx=5)
+
+        # ── Card principal ────────────────────────────────────────────────────
         card = ttk.Frame(main_frame, style="Card.TFrame", padding=20)
         card.pack(fill="both", expand=True)
-        
-        # Filtros
+
+        # ── Filtros ───────────────────────────────────────────────────────────
         filtro_frame = ttk.Frame(card, style="Card.TFrame")
-        filtro_frame.pack(fill="x", pady=(0, 15))
-        
-        # Linha 1 - Busca
-        busca_frame = ttk.Frame(filtro_frame, style="Card.TFrame")
-        busca_frame.pack(fill="x", pady=(0, 10))
-        
-        ttk.Label(
-            busca_frame,
-            text="🔍 Buscar:",
-            font=('Segoe UI', 10),
-            background=CORES['bg_card'],
-            foreground=CORES['text_dark']
-        ).pack(side="left", padx=(0, 10))
-        
+        filtro_frame.pack(fill="x", pady=(0, 12))
+
+        # Busca
+        ttk.Label(filtro_frame, text="🔍 Buscar:",
+                  font=('Segoe UI', 10),
+                  background=CORES['bg_card'],
+                  foreground=CORES['text_dark']).pack(side="left", padx=(0, 5))
+
         self.var_busca = tk.StringVar()
-        self.var_busca.trace('w', lambda *args: self.carregar_servicos())
-        
-        entry_busca = ttk.Entry(
-            busca_frame,
-            textvariable=self.var_busca,
-            font=('Segoe UI', 10),
-            width=40
-        )
-        entry_busca.pack(side="left", fill="x", expand=True)
-        
-        ttk.Label(
-            busca_frame,
-            text="(Nome ou CPF do diarista)",
-            font=('Segoe UI', 8, 'italic'),
-            background=CORES['bg_card'],
-            foreground=CORES['text_light']
-        ).pack(side="left", padx=(10, 0))
-        
-        # Linha 2 - Período
-        periodo_frame = ttk.Frame(filtro_frame, style="Card.TFrame")
-        periodo_frame.pack(fill="x")
-        
-        ttk.Label(
-            periodo_frame,
-            text="📅 Período:",
-            font=('Segoe UI', 10),
-            background=CORES['bg_card'],
-            foreground=CORES['text_dark']
-        ).pack(side="left", padx=(0, 10))
-        
+        self.var_busca.trace_add("write", lambda *_: self.aplicar_filtros())
+        ttk.Entry(filtro_frame, textvariable=self.var_busca,
+                  width=30).pack(side="left", padx=(0, 5))
+
+        ttk.Label(filtro_frame, text="(nome ou CPF)",
+                  font=('Segoe UI', 8),
+                  background=CORES['bg_card'],
+                  foreground=CORES['text_light']).pack(side="left", padx=(0, 15))
+
+        # Período
+        ttk.Separator(filtro_frame, orient="vertical").pack(
+            side="left", fill="y", padx=10, pady=2)
+
+        ttk.Label(filtro_frame, text="📅 Período:",
+                  font=('Segoe UI', 10),
+                  background=CORES['bg_card'],
+                  foreground=CORES['text_dark']).pack(side="left", padx=(0, 5))
+
         self.combo_periodo = ttk.Combobox(
-            periodo_frame,
+            filtro_frame,
             values=["Todos", "Hoje", "Última Semana", "Último Mês"],
-            state="readonly",
-            width=18
+            state="readonly", width=15
         )
         self.combo_periodo.set("Todos")
-        self.combo_periodo.pack(side="left", padx=5)
-        self.combo_periodo.bind("<<ComboboxSelected>>", lambda e: self.carregar_servicos())
-        
-        # Frame para a tabela
-        tabela_container = tk.Frame(card, bg=CORES['bg_card'])
-        tabela_container.pack(fill="both", expand=True)
+        self.combo_periodo.pack(side="left", padx=(0, 5))
+        self.combo_periodo.bind("<<ComboboxSelected>>",
+                                lambda _: self.carregar_servicos())
 
-        # Estilo do Treeview
+        ttk.Button(filtro_frame, text="✖ Limpar",
+                   style="Secondary.TButton",
+                   command=self.limpar_filtros).pack(side="right")
+
+        # ── Contador ──────────────────────────────────────────────────────────
+        self.label_total = ttk.Label(card, text="",
+                                     font=('Segoe UI', 9),
+                                     background=CORES['bg_card'],
+                                     foreground=CORES['text_light'])
+        self.label_total.pack(anchor="w", pady=(0, 8))
+
+        # ── Treeview ──────────────────────────────────────────────────────────
+        self._criar_treeview(card)
+
+        # ── Ações ─────────────────────────────────────────────────────────────
+        acoes_frame = ttk.Frame(card, style="Card.TFrame")
+        acoes_frame.pack(fill="x", pady=(10, 0))
+
+
+        ttk.Button(acoes_frame, text="✏️ Editar",
+                   style="Primary.TButton",
+                   command=lambda: self._acao("editar")).pack(side="left", padx=5)
+
+        ttk.Button(acoes_frame, text="🗑️ Excluir",
+                   style="Danger.TButton",
+                   command=lambda: self._acao("excluir")).pack(side="left", padx=5)
+
+        ttk.Label(acoes_frame,
+                  text="Duplo clique para abrir o recibo",
+                  font=('Segoe UI', 8, 'italic'),
+                  background=CORES['bg_card'],
+                  foreground=CORES['text_light']).pack(side="right")
+
+        self.tree.bind("<Double-1>", lambda _e: self._acao("recibo"))
+
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _criar_treeview(self, parent):
         style = ttk.Style()
         style.theme_use('clam')
 
         style.configure(
             "Servicos.Treeview",
-            background="white",
-            foreground=CORES['text_dark'],
-            rowheight=32,
-            fieldbackground="white",
-            font=('Segoe UI', 9),
-            borderwidth=0
+            background="white", foreground=CORES['text_dark'],
+            rowheight=32, fieldbackground="white",
+            font=('Segoe UI', 9), borderwidth=0
         )
         style.configure(
             "Servicos.Treeview.Heading",
-            background=CORES['primary'],
-            foreground="white",
-            font=('Segoe UI', 9, 'bold'),
-            relief="flat",
-            padding=(10, 8)
+            background=CORES['primary'], foreground="white",
+            font=('Segoe UI', 9, 'bold'), relief="flat", padding=(10, 8)
         )
-        style.map(
-            "Servicos.Treeview",
-            background=[("selected", CORES['secondary'])],
-            foreground=[("selected", "white")]
-        )
-        style.map(
-            "Servicos.Treeview.Heading",
-            background=[("active", CORES['primary'])]
-        )
+        style.map("Servicos.Treeview",
+                  background=[("selected", CORES['secondary'])],
+                  foreground=[("selected", "white")])
+        style.map("Servicos.Treeview.Heading",
+                  background=[("active", CORES['primary'])])
 
-        # Scrollbars
-        scroll_y = ttk.Scrollbar(tabela_container, orient="vertical")
+        tree_frame = ttk.Frame(parent, style="Card.TFrame")
+        tree_frame.pack(fill="both", expand=True)
+
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical")
         scroll_y.pack(side="right", fill="y")
 
-        scroll_x = ttk.Scrollbar(tabela_container, orient="horizontal")
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal")
         scroll_x.pack(side="bottom", fill="x")
 
-        # Treeview
-        colunas = ("data", "diarista", "centro_custo", "descricao", "valor")
+        colunas = ("data", "diaristas", "centro_custo", "descricao", "valor")
+
         self.tree = ttk.Treeview(
-            tabela_container,
+            tree_frame,
             columns=colunas,
             show="headings",
             style="Servicos.Treeview",
+            selectmode="browse",
             yscrollcommand=scroll_y.set,
             xscrollcommand=scroll_x.set
         )
-
         scroll_y.config(command=self.tree.yview)
         scroll_x.config(command=self.tree.xview)
 
-        # Cabeçalhos
         self.tree.heading("data",         text="Data",            anchor="w")
-        self.tree.heading("diarista",     text="Diarista",        anchor="w")
+        self.tree.heading("diaristas",    text="Diarista(s)",     anchor="w")
         self.tree.heading("centro_custo", text="Centro de Custo", anchor="w")
         self.tree.heading("descricao",    text="Descrição",       anchor="w")
-        self.tree.heading("valor",        text="Valor",           anchor="e")
+        self.tree.heading("valor",        text="Valor Total",     anchor="e")
 
-        # Larguras das colunas
-        self.tree.column("data",         width=100, minwidth=90,  stretch=False)
-        self.tree.column("diarista",     width=180, minwidth=140, stretch=False)
-        self.tree.column("centro_custo", width=160, minwidth=120, stretch=False)
-        self.tree.column("descricao",    width=250, minwidth=150, stretch=True)
-        self.tree.column("valor",        width=110, minwidth=90,  stretch=False, anchor="e")
+        self.tree.column("data",         width=100, minwidth=90,  stretch=False, anchor="w")
+        self.tree.column("diaristas",    width=220, minwidth=140, stretch=False, anchor="w")
+        self.tree.column("centro_custo", width=160, minwidth=110, stretch=False, anchor="w")
+        self.tree.column("descricao",    width=240, minwidth=140, stretch=True,  anchor="w")
+        self.tree.column("valor",        width=120, minwidth=90,  stretch=False, anchor="e")
 
-        # Zebra
         self.tree.tag_configure("par",   background="#f8f9fa")
         self.tree.tag_configure("impar", background="white")
 
         self.tree.pack(fill="both", expand=True)
 
-        # Duplo clique → abre recibo
-        self.tree.bind("<Double-1>", self._on_duplo_clique)
+    # ─────────────────────────────────────────────────────────────────────────
+    # CARREGAMENTO / FILTRAGEM
+    # ─────────────────────────────────────────────────────────────────────────
 
-        # Armazena dados dos serviços para ações
-        self._servicos_map = {}
-
-        # Painel de ações abaixo da tabela
-        acoes_frame = tk.Frame(card, bg=CORES['bg_card'])
-        acoes_frame.pack(fill="x", pady=(10, 0))
-
-        ttk.Button(
-            acoes_frame,
-            text="📄 Recibo",
-            style="Primary.TButton",
-            command=lambda: self._acao("recibo")
-        ).pack(side="left", padx=(0, 5))
-
-        ttk.Button(
-            acoes_frame,
-            text="✏️ Editar",
-            style="Secondary.TButton",
-            command=lambda: self._acao("editar")
-        ).pack(side="left", padx=5)
-
-        ttk.Button(
-            acoes_frame,
-            text="🗑️ Excluir",
-            style="Danger.TButton",
-            command=lambda: self._acao("excluir")
-        ).pack(side="left", padx=5)
-
-        ttk.Label(
-            acoes_frame,
-            text="Selecione uma linha • Duplo clique para abrir o recibo",
-            font=('Segoe UI', 8, 'italic'),
-            background=CORES['bg_card'],
-            foreground=CORES['text_light']
-        ).pack(side="right")
-    
-    def get_filtro_periodo(self):
-        """Retorna as datas de filtro baseado no período selecionado"""
+    def _get_filtro_periodo(self):
         periodo = self.combo_periodo.get()
-        hoje = datetime.now()
-        
+        hoje    = datetime.now()
         if periodo == "Hoje":
-            data_inicio = hoje.strftime('%Y-%m-%d')
-            data_fim = hoje.strftime('%Y-%m-%d')
+            d = hoje.strftime('%Y-%m-%d')
+            return d, d
         elif periodo == "Última Semana":
-            data_inicio = (hoje - timedelta(days=7)).strftime('%Y-%m-%d')
-            data_fim = hoje.strftime('%Y-%m-%d')
+            return (hoje - timedelta(days=7)).strftime('%Y-%m-%d'), hoje.strftime('%Y-%m-%d')
         elif periodo == "Último Mês":
-            data_inicio = (hoje - timedelta(days=30)).strftime('%Y-%m-%d')
-            data_fim = hoje.strftime('%Y-%m-%d')
-        else:  # Todos
-            data_inicio = None
-            data_fim = None
-        
-        return data_inicio, data_fim
-    
+            return (hoje - timedelta(days=30)).strftime('%Y-%m-%d'), hoje.strftime('%Y-%m-%d')
+        return None, None
+
     def carregar_servicos(self):
-        # Limpa treeview e mapa
-        self.tree.delete(*self.tree.get_children())
-        self._servicos_map.clear()
-
-        # Filtros
-        data_inicio, data_fim = self.get_filtro_periodo()
-        servicos = self.dao.listar(
-            filtro_data_inicio=data_inicio,
-            filtro_data_fim=data_fim
+        ini, fim = self._get_filtro_periodo()
+        self._servicos_cache = self.dao.listar(
+            filtro_data_inicio=ini,
+            filtro_data_fim=fim
         )
+        self.aplicar_filtros()
 
-        # Filtro de busca por nome/CPF
-        termo = self.var_busca.get().lower().strip()
-        if termo:
-            servicos = [
-                s for s in servicos
-                if termo in s[2].lower() or termo in s[3]
-            ]
+    def aplicar_filtros(self):
+        termo = self.var_busca.get().strip().lower()
 
-        if not servicos:
-            self.tree.insert(
-                "", "end",
-                values=("—", "Nenhum serviço encontrado", "—", "—", "—"),
-                tags=("impar",)
-            )
-            return
+        resultado = []
+        for s in self._servicos_cache:
+            if termo:
+                # Busca em nome e CPF de qualquer participante
+                match = any(
+                    termo in p['nome'].lower() or termo in p['cpf']
+                    for p in s['diaristas']
+                )
+                if not match:
+                    continue
+            resultado.append(s)
 
-        for i, servico in enumerate(servicos):
+        self._popular_tree(resultado)
+
+    def _popular_tree(self, servicos):
+        selecionado = self._iid_selecionado()
+        self.tree.delete(*self.tree.get_children())
+
+        for i, s in enumerate(servicos):
             tag = "par" if i % 2 == 0 else "impar"
-            
-            valor_fmt = (
-                f"R$ {servico[5]:,.2f}"
-                .replace(',', 'X').replace('.', ',').replace('X', '.')
-            )
-            iid = self.tree.insert(
-                "", "end",
+
+            # Exibe nomes resumidos: "João, Maria +1"
+            nomes = [p['nome'].split()[0] for p in s['diaristas']]
+            if len(nomes) <= 2:
+                diaristas_txt = ", ".join(nomes)
+            else:
+                diaristas_txt = f"{', '.join(nomes[:2])} +{len(nomes)-2}"
+
+            iid = str(s['id'])
+            self.tree.insert(
+                "", "end", iid=iid,
                 values=(
-                    servico[1],   # data
-                    servico[2],   # diarista
-                    servico[4],   # centro de custo
-                    servico[6],   # descrição
-                    valor_fmt     # valor
+                    formatar_data_br(s['data_servico']) or "—",
+                    diaristas_txt,
+                    s['centro_custo'],
+                    s['descricao'],
+                    _fmt_valor(s['valor'])
                 ),
                 tags=(tag,)
             )
-            self._servicos_map[iid] = servico
-    
+
+        if selecionado and self.tree.exists(selecionado):
+            self.tree.selection_set(selecionado)
+            self.tree.see(selecionado)
+
+        total = len(servicos)
+        self.label_total.config(
+            text=f"{total} serviço{'s' if total != 1 else ''} encontrado{'s' if total != 1 else ''}"
+        )
+
+    def limpar_filtros(self):
+        self.var_busca.set("")
+        self.combo_periodo.set("Todos")
+        self.carregar_servicos()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # HELPERS
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _iid_selecionado(self):
+        sel = self.tree.selection()
+        return sel[0] if sel else None
+
+    def _servico_selecionado(self):
+        iid = self._iid_selecionado()
+        if not iid:
+            return None
+        pid = int(iid)
+        return next((s for s in self._servicos_cache if s['id'] == pid), None)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # AÇÕES
+    # ─────────────────────────────────────────────────────────────────────────
+
     def _acao(self, tipo):
-        """Executa ação sobre a linha selecionada no treeview"""
-        servico = self._get_servico_selecionado()
+        servico = self._servico_selecionado()
         if not servico:
             messagebox.showwarning("Atenção", "Selecione um serviço na tabela!")
             return
-
         if tipo == "recibo":
             self.exibir_recibo(servico)
         elif tipo == "editar":
-            self.editar_servico(servico[0])
+            self.editar_servico(servico['id'])
         elif tipo == "excluir":
-            self.excluir_servico(servico[0], servico[2])
-
-    def _on_duplo_clique(self, event):
-        iid = self.tree.focus()
-        if iid and iid in self._servicos_map:
-            self.exibir_recibo(self._servicos_map[iid])
-
-    def _get_servico_selecionado(self):
-        iid = self.tree.focus()
-        return self._servicos_map.get(iid)
-    
-    def criar_linha_servico(self, servico):
-        """Linha da tabela usando grid — alinhada com o cabeçalho"""
-        # servico: (id, data, diarista_nome, diarista_cpf, centro_custo,
-        #           valor, descricao, observacoes, diarista_id, centro_custo_id)
-
-        bg = 'white'
-
-        linha = tk.Frame(self.scroll_frame, bg=bg, relief='solid', bd=0,
-                         highlightbackground=CORES['border'], highlightthickness=1)
-        linha.pack(fill="x", pady=0)
-
-        # Mesmas configurações de coluna que o cabeçalho
-        for col, (_, largura, peso) in enumerate(self.COLUNAS):
-            linha.grid_columnconfigure(col, minsize=largura, weight=peso)
-        
-        valor_formatado = (
-            f"R$ {servico[5]:,.2f}"
-            .replace(',', 'X').replace('.', ',').replace('X', '.')
-        )
-
-        celulas = [
-            (servico[1],        'w', CORES['text_dark'],  False),
-            (servico[2],        'w', CORES['text_dark'],  False),
-            (servico[4],        'w', CORES['text_dark'],  False),
-            (servico[6],        'w', CORES['text_light'], False),
-            (valor_formatado,   'e', CORES['success'],    True),
-        ]
-
-        labels = []
-        for col, (texto, ancora, cor, negrito) in enumerate(celulas):
-            lbl = tk.Label(
-                linha,
-                text=texto,
-                font=('Segoe UI', 9, 'bold' if negrito else 'normal'),
-                bg=bg,
-                fg=cor,
-                anchor=ancora,
-                padx=10,
-                pady=7
-            )
-            lbl.grid(row=0, column=col, sticky="nsew")
-            labels.append(lbl)
-
-        # Célula de ações
-        btn_frame = tk.Frame(linha, bg=bg)
-        btn_frame.grid(row=0, column=5, sticky="nsew", padx=5, pady=4)
-
-        for texto, cor, cmd in [
-            ("📄", CORES['primary'],  lambda s=servico: self.exibir_recibo(s)),
-            ("✏️", CORES['secondary'], lambda s=servico: self.editar_servico(s[0])),
-            ("🗑️", CORES['danger'],   lambda s=servico: self.excluir_servico(s[0], s[2])),
-        ]:
-            tk.Button(
-                btn_frame,
-                text=texto,
-                font=('Segoe UI', 9),
-                bg=cor,
-                fg='white',
-                relief='flat',
-                cursor='hand2',
-                padx=7,
-                pady=1,
-                command=cmd
-            ).pack(side="left", padx=2)
-
-        # Hover
-        todos = [linha, btn_frame] + labels
-
-        def on_enter(e):
-            for w in todos:
-                w.config(bg=CORES['bg_hover'])
-
-        def on_leave(e):
-            for w in todos:
-                w.config(bg=bg)
-
-        for w in [linha] + labels:
-            w.bind("<Enter>", on_enter)
-            w.bind("<Leave>", on_leave)
+            nomes = ", ".join(p['nome'] for p in servico['diaristas'])
+            self.excluir_servico(servico['id'], nomes)
 
     def abrir_relatorio(self):
         from telas.tela_relatorio_servicos import TelaRelatorioServicos
         TelaRelatorioServicos(self.parent_frame)
-    
+
     def novo_servico(self):
         TelaNovoServico(self.parent_frame, self.carregar_servicos)
-    
+
     def editar_servico(self, servico_id):
         TelaNovoServico(self.parent_frame, self.carregar_servicos, servico_id)
-    
+
     def exibir_recibo(self, servico_dados):
-        """Gera e abre o recibo temporário em PDF"""
         try:
-            arquivo = ReciboServicoService.gerar_recibo_temporario(servico_dados)
-            # O arquivo já é aberto automaticamente no service
+            ReciboServicoService.gerar_recibo_temporario(servico_dados)
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao gerar recibo: {str(e)}")
-    
-    def excluir_servico(self, servico_id, diarista_nome):
-        """Exclui um serviço após confirmação"""
-        resposta = messagebox.askyesno(
+
+    def excluir_servico(self, servico_id, diarista_nomes):
+        if messagebox.askyesno(
             "Confirmar Exclusão",
-            f"Tem certeza que deseja excluir o serviço de '{diarista_nome}'?\n\n"
-            "Esta ação não pode ser desfeita!"
-        )
-        
-        if resposta:
+            f"Excluir o serviço de '{diarista_nomes}'?\n\nEsta ação não pode ser desfeita!"
+        ):
             if self.dao.excluir(servico_id):
                 messagebox.showinfo("Sucesso", "Serviço excluído com sucesso!")
                 self.carregar_servicos()
