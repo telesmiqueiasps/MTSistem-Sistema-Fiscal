@@ -357,8 +357,8 @@ class DiariasEmitidasEmbed:
             )
             return
 
-        id_diaria = tags[0]
-        caminho_pdf = tags[1]
+        id_diaria = tags[1]
+        
 
         confirmar = messagebox.askyesno(
             "Confirmação",
@@ -370,9 +370,6 @@ class DiariasEmitidasEmbed:
 
         try:
             self.dao.excluir_diaria(id_diaria)
-
-            if caminho_pdf and os.path.exists(caminho_pdf):
-                os.remove(caminho_pdf)
 
             self.atualizar_lista()
 

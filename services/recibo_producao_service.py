@@ -238,10 +238,10 @@ class ReciboProducaoService:
         # =========================
         # Cabeçalho Empresa
         # =========================
-        c.setFont("Helvetica-Bold", 13)
+        c.setFont("Helvetica-Bold", 12)
         c.drawCentredString(largura / 2, y_topo - 10, empresa["razao_social"])
 
-        c.setFont("Helvetica", 10)
+        c.setFont("Helvetica", 9)
         c.drawCentredString(
             largura / 2,
             y_topo - 28,
@@ -261,11 +261,11 @@ class ReciboProducaoService:
         # =========================
         y = y_topo - 120
 
-        c.setFont("Helvetica-Bold", 15)
+        c.setFont("Helvetica-Bold", 13)
         c.drawCentredString(largura / 2, y, "RECIBO GERAL DE PRODUÇÃO")
 
         y -= 25
-        c.setFont("Helvetica", 10)
+        c.setFont("Helvetica", 9)
         c.drawCentredString(
             largura / 2,
             y,
@@ -276,15 +276,14 @@ class ReciboProducaoService:
         # Total geral (destaque)
         # =========================
         valor_total_geral = sum(t["valor_total"] for t in totais)
-        total_sacos_geral = sum(t["total_sacos"] for t in totais)
 
 
         y -= 40
-        c.setFont("Helvetica-Bold", 13)
+        c.setFont("Helvetica-Bold", 10)
         c.drawRightString(
             largura - 3 * cm,
             y,
-            f"TOTAL: {total_sacos_geral} SACOS  |  R$ {valor_total_geral:.2f}"
+            f"TOTAL: {producao['total_sacos']} SACOS  |  R$ {valor_total_geral:.2f}"
         )
 
 
@@ -297,7 +296,7 @@ class ReciboProducaoService:
             parent=styles["Normal"],
             alignment=TA_JUSTIFY,
             fontName="Helvetica",
-            fontSize=11,
+            fontSize=10,
             leading=16
         )
 
@@ -314,7 +313,7 @@ class ReciboProducaoService:
 
         frame = Frame(
             2 * cm,
-            altura - 18 * cm,
+            altura - 15 * cm,
             largura - 4 * cm,
             4 * cm,
             showBoundary=0
@@ -322,20 +321,20 @@ class ReciboProducaoService:
 
         frame.addFromList([Paragraph(texto, style)], c)
 
-        y = altura - 20 * cm
+        y = altura - 16 * cm
  
 
         # =========================
         # Assinatura
         # =========================
         
-        c.setFont("Helvetica", 10)
+        c.setFont("Helvetica", 9)
 
         for t in totais:
             if y < 4 * cm:
                 c.showPage()
                 y = altura - 4 * cm
-                c.setFont("Helvetica", 10)
+                c.setFont("Helvetica", 9)
 
             # Linha de assinatura
             c.line(4 * cm, y, largura - 4 * cm, y)

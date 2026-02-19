@@ -133,8 +133,12 @@ class DiariaDAO:
 
     def excluir_diaria(self, id_diaria):
         cur = self.conn.cursor()
+        id_diaria = int(id_diaria)  # garantir inteiro
         cur.execute("DELETE FROM diarias WHERE id = ?", (id_diaria,))
+    
         self.conn.commit()
+
+
 
     def buscar_diaria_por_id(self, id_diaria):
         cur = self.conn.cursor()

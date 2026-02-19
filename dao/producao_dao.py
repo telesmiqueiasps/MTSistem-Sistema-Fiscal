@@ -193,8 +193,8 @@ class ProducaoDAO:
                 'quantidade_sacos': 100,
                 'descricao': 'Turno manhã',
                 'participantes': [
-                    {'diarista_id': 1, 'quantidade_sacos': 50},
-                    {'diarista_id': 2, 'quantidade_sacos': 50}
+                    {'diarista_id': 1, 'valor_receber': 250.00},
+                    {'diarista_id': 2, 'valor_receber': 250.00}
                 ]
             }
         ]
@@ -221,34 +221,32 @@ class ProducaoDAO:
                 divisao_id = cursor.lastrowid
 
                 for participante in divisao['participantes']:
-                    qtd_sacos_participante = participante['quantidade_sacos']
-                    valor_receber = qtd_sacos_participante * valor_saco
+                    valor_receber = participante['valor_receber']
 
                     cursor.execute(
                         """INSERT INTO producao_participantes
-                           (producao_divisao_id, diarista_id, quantidade_sacos, valor_receber)
-                           VALUES (?, ?, ?, ?)""",
-                        (divisao_id, participante['diarista_id'],
-                         qtd_sacos_participante, valor_receber)
+                           (producao_divisao_id, diarista_id, valor_receber)
+                           VALUES (?, ?, ?)""",
+                        (divisao_id, participante['diarista_id'], valor_receber)
                     )
 
+                    # Atualiza totais do diarista na produção
                     cursor.execute(
                         """INSERT INTO producao_totais_diarista
                            (producao_id, diarista_id, total_sacos, valor_total)
-                           VALUES (?, ?, ?, ?)
+                           VALUES (?, ?, 0, ?)
                            ON CONFLICT(producao_id, diarista_id)
-                           DO UPDATE SET
-                               total_sacos = total_sacos + ?,
-                               valor_total = valor_total + ?""",
+                           DO UPDATE SET valor_total = valor_total + ?""",
                         (producao_id, participante['diarista_id'],
-                         qtd_sacos_participante, valor_receber,
-                         qtd_sacos_participante, valor_receber)
+                         valor_receber, valor_receber)
                     )
 
             self.conn.commit()
             return True
         except Exception as e:
             print(f"Erro ao adicionar dia de produção: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def listar_dias_producao(self, producao_id: int) -> List[Dict]:
@@ -326,7 +324,7 @@ class ProducaoDAO:
             }
 
             cursor.execute(
-                """SELECT d.id, d.nome, d.cpf, pp.quantidade_sacos, pp.valor_receber
+                """SELECT d.id, d.nome, d.cpf, pp.valor_receber
                    FROM producao_participantes pp
                    JOIN diaristas d ON d.id = pp.diarista_id
                    WHERE pp.producao_divisao_id = ?""",
@@ -335,7 +333,7 @@ class ProducaoDAO:
             for p in cursor.fetchall():
                 divisao_dict['participantes'].append({
                     'diarista_id': p[0], 'nome': p[1], 'cpf': p[2],
-                    'quantidade_sacos': p[3], 'valor_receber': p[4]
+                    'valor_receber': p[3]
                 })
 
             resultado['divisoes'].append(divisao_dict)
@@ -358,11 +356,11 @@ class ProducaoDAO:
             cursor.execute(
                 "DELETE FROM producao_totais_diarista WHERE producao_id = ?", (producao_id,))
 
+            # Recalcula totais apenas pelo valor_receber
             cursor.execute(
                 """INSERT INTO producao_totais_diarista
                        (producao_id, diarista_id, total_sacos, valor_total)
-                   SELECT ?, pp.diarista_id,
-                          SUM(pp.quantidade_sacos), SUM(pp.valor_receber)
+                   SELECT ?, pp.diarista_id, 0, SUM(pp.valor_receber)
                    FROM producao_participantes pp
                    JOIN producao_divisoes pd   ON pd.id   = pp.producao_divisao_id
                    JOIN producao_dias pdia     ON pdia.id = pd.producao_dia_id
@@ -375,6 +373,8 @@ class ProducaoDAO:
             return True
         except Exception as e:
             print(f"Erro ao deletar dia de produção: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     # ─── Relatórios ───────────────────────────────────────────────────────────
