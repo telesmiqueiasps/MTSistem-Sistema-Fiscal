@@ -94,7 +94,7 @@ class ReciboServicoService:
             c.setFont("Helvetica", 9)
             c.drawCentredString(
                 largura / 2, y - 26,
-                f"CNPJ: {empresa.get('cnpj', '')}  |  "
+                f"CNPJ/CPF: {empresa.get('cnpj', '')}  |  "
                 f"IE: {empresa.get('inscricao_estadual', '')}"
             )
             c.drawCentredString(

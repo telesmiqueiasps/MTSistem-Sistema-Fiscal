@@ -79,7 +79,7 @@ class RelatorioDiariaPDF:
             header_data.append(["", ""])
 
         if empresa:
-            empresa_txt = f"<b>{empresa.get('razao_social', 'EMPRESA NÃO IDENTIFICADA')}</b><br/>CNPJ: {empresa.get('cnpj', '')}   IE: {empresa.get('inscricao_estadual', '')}<br/>{empresa.get('endereco', '')}, {empresa.get('cidade', '')} - {empresa.get('uf', '')}"
+            empresa_txt = f"<b>{empresa.get('razao_social', 'EMPRESA NÃO IDENTIFICADA')}</b><br/>CNPJ/CPF: {empresa.get('cnpj', '')}   IE: {empresa.get('inscricao_estadual', '')}<br/>{empresa.get('endereco', '')}, {empresa.get('cidade', '')} - {empresa.get('uf', '')}"
         else:
             empresa_txt = "<i>Empresa não identificada</i>"
 

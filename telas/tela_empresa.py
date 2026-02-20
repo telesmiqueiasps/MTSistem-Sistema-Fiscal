@@ -74,7 +74,7 @@ class TelaEmpresa:
         # Linha dupla: CNPJ + Inscrição Estadual
         self.criar_linha_dupla(
             card,
-            ("CNPJ", "cnpj"),
+            ("CNPJ/CPF", "cnpj"),
             ("Inscrição Estadual", "inscricao_estadual")
         )
 

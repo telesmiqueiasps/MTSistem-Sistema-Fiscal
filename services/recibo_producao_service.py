@@ -245,7 +245,7 @@ class ReciboProducaoService:
         c.drawCentredString(
             largura / 2,
             y_topo - 28,
-            f"CNPJ: {empresa['cnpj']} | IE: {empresa['inscricao_estadual']}"
+            f"CNPJ/CPF: {empresa['cnpj']} | IE: {empresa['inscricao_estadual']}"
         )
 
         c.drawCentredString(

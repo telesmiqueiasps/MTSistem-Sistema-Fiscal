@@ -94,7 +94,7 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
     c.drawCentredString(
         largura / 2,
         y - 28,
-        f"CNPJ: {empresa['cnpj']}  |  IE: {empresa['inscricao_estadual']}"
+        f"CNPJ/CPF: {empresa['cnpj']}  |  IE: {empresa['inscricao_estadual']}"
     )
 
     endereco = (
@@ -151,7 +151,7 @@ def gerar_pdf_recibo_diaria(dados, salvar=False, abrir=True):
         complemento = "pela prestação do serviço abaixo descrito"
 
     texto = f"""
-    Recebi da empresa <b>{empresa['razao_social']}</b>, inscrita no CNPJ sob nº
+    Recebi de(a) <b>{empresa['razao_social']}</b>, inscrito(a) sob CNPJ/CPF nº
     <b>{empresa['cnpj']}</b>, a importância de <b>{valor_total}</b> referente ao
     pagamento de <b>{qtd_diarias}</b> diária(s) {complemento}, onde ASSINO E
     CONFIRMO como verdadeiras as informações aqui prestadas, comprometendo-me

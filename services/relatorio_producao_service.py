@@ -81,7 +81,7 @@ class RelatorioProducaoPDF:
         if empresa:
             empresa_txt = (
                 f"<b>{empresa.get('razao_social', 'EMPRESA NÃO IDENTIFICADA')}</b><br/>"
-                f"CNPJ: {empresa.get('cnpj', '')}  "
+                f"CNPJ/CPF: {empresa.get('cnpj', '')}  "
                 f"IE: {empresa.get('inscricao_estadual', '')}<br/>"
                 f"{empresa.get('endereco', '')}, "
                 f"{empresa.get('cidade', '')}/{empresa.get('uf', '')}"
