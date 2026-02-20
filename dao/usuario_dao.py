@@ -57,47 +57,12 @@ class UsuarioDAO:
 
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS diaristas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL,
-                cpf TEXT NOT NULL UNIQUE
-            )
-        """)
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS centros_custo (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                centro TEXT NOT NULL UNIQUE
-            )
-        """)
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS valores_diaria (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                valor_padrao REAL NOT NULL,
-                valor_diferente REAL,
-                valor_hora_extra REAL,
-                horas_por_diaria REAL NOT NULL   
-            )
-        """)
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS diarias (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tipo_diaria TEXT NOT NULL,
-                diarista TEXT NOT NULL,
-                cpf TEXT NOT NULL,
-                qtd_diarias INTEGER DEFAULT 0,
-                tipo_valor TEXT NOT NULL,
-                vlr_diaria_hora REAL DEFAULT 0,
-                vlr_horas_extras REAL DEFAULT 0,
-                qtd_horas REAL DEFAULT 0,
-                vlr_unitario REAL NOT NULL,
-                centro_custo TEXT NOT NULL,
-                vlr_total REAL NOT NULL,
-                descricao TEXT,
-                data_emissao TEXT NOT NULL,
-                caminho_arquivo TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS usuario_empresas (
+                usuario_id INTEGER,
+                empresa_id INTEGER,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+                FOREIGN KEY (empresa_id) REFERENCES empresa(id),
+                UNIQUE(usuario_id, empresa_id)
             )
         """)
 
@@ -234,6 +199,26 @@ class UsuarioDAO:
 
         # 4️⃣ Login permitido
         return usuario_id, is_admin
+
+
+    def empresas_do_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+
+        # Admin vê todas
+        cur.execute("SELECT admin FROM usuarios WHERE id=?", (usuario_id,))
+        is_admin = cur.fetchone()[0]
+
+        if is_admin:
+            cur.execute("SELECT id, nome_exibicao FROM empresa")
+        else:
+            cur.execute("""
+                SELECT e.id, e.nome_exibicao
+                FROM empresa e
+                JOIN usuario_empresas ue ON ue.empresa_id = e.id
+                WHERE ue.usuario_id = ?
+            """, (usuario_id,))
+
+        return cur.fetchall()
 
 
 

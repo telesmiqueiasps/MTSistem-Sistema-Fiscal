@@ -47,7 +47,7 @@ class TelaEmpresa:
         left_header = ttk.Frame(header_container, style='Main.TFrame')
         left_header.pack(side="left")
 
-        caminho_icone = resource_path("Icones/empresa_azul.png")
+        caminho_icone = resource_path("Icones/editar_empresa_azul.png")
         img = Image.open(caminho_icone)
         img = img.resize((32, 32), Image.LANCZOS)
         self.icon_header = ImageTk.PhotoImage(img)

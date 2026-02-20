@@ -1,12 +1,12 @@
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
-from database.conexao import garantir_banco
+from database.empresa_conexao import get_conn_empresa
 
 
 class ProducaoDAO:
     def __init__(self):
-        self.conn = garantir_banco()
+        self.conn = get_conn_empresa()
 
     def _get_connection(self):
         return self.conn

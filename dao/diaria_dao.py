@@ -1,10 +1,10 @@
-from database.conexao import garantir_banco
+from database.empresa_conexao import get_conn_empresa
 from datetime import datetime
 
 
 class DiariaDAO:
     def __init__(self):
-        self.conn = garantir_banco()
+        self.conn = get_conn_empresa()
 
     # =========================
     # DIARISTAS

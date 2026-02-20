@@ -1,9 +1,9 @@
-from database.conexao import garantir_banco
+from database.empresa_conexao import get_conn_empresa
 
 
 class CentroCustoDAO:
     def __init__(self):
-        self.conn = garantir_banco()
+        self.conn = get_conn_empresa()
 
     def listar(self):
         cur = self.conn.cursor()

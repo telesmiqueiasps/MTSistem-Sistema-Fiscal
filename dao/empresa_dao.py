@@ -1,9 +1,10 @@
 import sqlite3
-from database.conexao import garantir_banco  # ajuste se seu projeto usar outro padrão
-
+from database.empresa_conexao import get_conn_empresa # ajuste se seu projeto usar outro padrão
+import os
+import shutil
 class EmpresaDAO:
     def __init__(self):
-        self.conn = garantir_banco()
+        self.conn = get_conn_empresa()
 
     def buscar_empresa(self):
         cur = self.conn.cursor()
@@ -39,6 +40,15 @@ class EmpresaDAO:
         ))
 
         self.conn.commit()
+
+        # 🔥 Pega o ID recém criado
+        empresa_id = cur.lastrowid
+
+        # 🔥 Cria banco físico da empresa
+        self._criar_banco_empresa(empresa_id)
+
+        return empresa_id
+
     
 
     def atualizar_empresa(self, dados):
@@ -71,3 +81,13 @@ class EmpresaDAO:
 
         self.conn.commit()
        
+
+    def _criar_banco_empresa(self, empresa_id):
+        base_dir = r"T:\MTSistem\db\empresas"
+        os.makedirs(base_dir, exist_ok=True)
+
+        destino = os.path.join(base_dir, f"{empresa_id}.db")
+        modelo = r"T:\MTSistem\db\modelo_empresa.db"
+
+        shutil.copyfile(modelo, destino)
+   

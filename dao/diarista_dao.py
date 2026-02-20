@@ -1,10 +1,11 @@
-from database.conexao import garantir_banco
+
 from typing import Optional, List, Tuple
+from database.empresa_conexao import get_conn_empresa
 
 
 class DiaristaDAO:
     def __init__(self):
-        self.conn = garantir_banco()
+        self.conn = get_conn_empresa()
 
     # ─────────────────────────────────────────────────────────────────────────
     # LISTAGEM

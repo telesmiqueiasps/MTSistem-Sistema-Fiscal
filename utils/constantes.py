@@ -1,6 +1,6 @@
 import os
 
-VERSAO_ATUAL = "1.3"
+VERSAO_ATUAL = "1.1.0"
 CAMINHO_EXE_ATUALIZADO = r"T:\MTSistem\app\MTSistem.exe"
 
 

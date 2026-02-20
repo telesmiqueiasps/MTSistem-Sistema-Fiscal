@@ -4,18 +4,20 @@ from tkinter import ttk, messagebox
 from utils.constantes import CORES, VERSAO_ATUAL
 from utils.auxiliares import resource_path, configurar_estilo, sistema_esta_desatualizado, atualizacao_liberada, executar_atualizacao
 from dao.usuario_dao import UsuarioDAO
+from database.sessao import sessao
 from PIL import Image, ImageTk
 
 # =====================================================
 # Extração Informações PDF → Excel
 # =====================================================
 class SistemaFiscal:
-    def __init__(self, root, usuario_id, usuario_nome, versao_remota):
+    def __init__(self, root):
         self.root = root
-        self.usuario_id = usuario_id
-        self.usuario_nome = usuario_nome
+        self.usuario_id = sessao.usuario_id
+        self.usuario_nome = sessao.usuario_nome
+        self.empresa_id = sessao.empresa_id
+        self.empresa_nome = sessao.empresa_nome
         self.dao = UsuarioDAO()
-        self.versao_remota = versao_remota
         self.desatualizado = sistema_esta_desatualizado(self.dao)
         self.atualizacao_liberada = atualizacao_liberada(self.dao)
         self.usuario_admin = self.dao.usuario_admin(self.usuario_id)
@@ -23,7 +25,7 @@ class SistemaFiscal:
             "mensagem_update",
             "⚠️ Sistema desatualizado"
         )
-        root.title("MT Sistem - Sistema Fiscal")
+        root.title(f"MT Sistem - Sistema Fiscal - {self.empresa_nome}")
         
         # Janela maximizada
         root.state('zoomed')
@@ -103,6 +105,7 @@ class SistemaFiscal:
         from telas.tela_usuarios_admin import TelaUsuariosAdmin
         from telas.tela_configuracoes import TelaConfiguracoesSistema
         from telas.tela_empresa import TelaEmpresa
+        from telas.tela_gestao_empresas import TelaGestaoEmpresas
 
         # =========================
         # CONTAINER PRINCIPAL
@@ -253,8 +256,8 @@ class SistemaFiscal:
 
             self.criar_menu_item(menu_frame, "Usuários", lambda: TelaUsuariosAdmin(self.root), icone="usuarios.png", is_admin_btn=True)
             self.criar_menu_item(menu_frame, "Configurações do Sistema", lambda: TelaConfiguracoesSistema(self.root), icone="config.png", is_admin_btn=True)
-            self.criar_menu_item(menu_frame, "Cadastro da Empresa", lambda: TelaEmpresa(self.root), icone="empresa.png", is_admin_btn=True)
-
+            self.criar_menu_item(menu_frame, "Cadastro da Empresa", lambda: TelaEmpresa(self.root), icone="editar_empresa.png", is_admin_btn=True)
+            self.criar_menu_item(menu_frame, "Gestão de Empresas", lambda: TelaGestaoEmpresas(self.root), icone="empresa.png", is_admin_btn=True)
         # =========================
         # RODAPÉ FIXO (sempre visível)
         # =========================
@@ -528,5 +531,5 @@ class SistemaFiscal:
         self.root.destroy()
 
         root = tk.Tk()
-        TelaLogin(root, versao_remota=self.versao_remota)
+        TelaLogin(root)
         root.mainloop()
