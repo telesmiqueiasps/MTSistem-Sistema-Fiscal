@@ -12,31 +12,6 @@ class ProducaoDAO:
         return self.conn
 
 
-    # ==================== VALOR DO SACO ====================
-
-    def get_valor_saco_atual(self) -> float:
-        """Retorna o valor atual do saco"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT valor FROM valor_saco WHERE ativo = 1 ORDER BY id DESC LIMIT 1")
-        result = cursor.fetchone()
-        return result[0] if result else 0.0
-
-    def atualizar_valor_saco(self, novo_valor: float) -> bool:
-        """Atualiza o valor do saco"""
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("UPDATE valor_saco SET ativo = 0")
-            cursor.execute(
-                "INSERT INTO valor_saco (valor, ativo) VALUES (?, 1)",
-                (novo_valor,)
-            )
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"Erro ao atualizar valor do saco: {e}")
-            return False
-
-
     # ==================== CENTRO DE CUSTO ====================
 
     def listar_centros_custo(self) -> List[Dict]:
@@ -49,14 +24,14 @@ class ProducaoDAO:
     # ==================== PRODUÇÕES ====================
 
     def criar_producao(self, centro_custo_id: int, data_inicio: str,
-                       observacoes: str = "") -> Optional[int]:
+                       valor_saco: float = 0.45, observacoes: str = "") -> Optional[int]:
         """Cria uma nova produção vinculada a um centro de custo"""
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                """INSERT INTO producoes (centro_custo_id, data_inicio, status, observacoes)
-                   VALUES (?, ?, 'aberta', ?)""",
-                (centro_custo_id, data_inicio, observacoes)
+                """INSERT INTO producoes (centro_custo_id, data_inicio, status, valor_saco, observacoes)
+                   VALUES (?, ?, 'aberta', ?, ?)""",
+                (centro_custo_id, data_inicio, valor_saco, observacoes)
             )
             producao_id = cursor.lastrowid
             self.conn.commit()
@@ -64,6 +39,20 @@ class ProducaoDAO:
         except Exception as e:
             print(f"Erro ao criar produção: {e}")
             return None
+
+    def atualizar_valor_saco_producao(self, producao_id: int, novo_valor: float) -> bool:
+        """Atualiza o valor do saco de uma produção específica"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE producoes SET valor_saco = ? WHERE id = ?",
+                (novo_valor, producao_id)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Erro ao atualizar valor do saco: {e}")
+            return False
 
     def listar_producoes(self, apenas_abertas: bool = False) -> List[Dict]:
         """Lista todas as produções com o nome do centro de custo"""
@@ -77,6 +66,7 @@ class ProducaoDAO:
                 p.data_inicio,
                 p.data_fim,
                 p.status,
+                p.valor_saco,
                 p.total_sacos,
                 p.valor_total,
                 p.observacoes,
@@ -103,6 +93,7 @@ class ProducaoDAO:
                    p.data_inicio,
                    p.data_fim,
                    p.status,
+                   p.valor_saco,
                    p.total_sacos,
                    p.valor_total,
                    p.observacoes,
@@ -188,6 +179,7 @@ class ProducaoDAO:
                                total_sacos: int, divisoes: List[Dict]) -> bool:
         """
         Adiciona um dia de produção com suas divisões.
+        Usa o valor_saco da produção.
         divisoes = [
             {
                 'quantidade_sacos': 100,
@@ -201,7 +193,13 @@ class ProducaoDAO:
         """
         try:
             cursor = self.conn.cursor()
-            valor_saco = self.get_valor_saco_atual()
+            
+            # Busca valor do saco da produção
+            cursor.execute("SELECT valor_saco FROM producoes WHERE id = ?", (producao_id,))
+            result = cursor.fetchone()
+            if not result:
+                raise ValueError(f"Produção {producao_id} não encontrada")
+            valor_saco = result[0]
 
             cursor.execute(
                 """INSERT INTO producao_dias

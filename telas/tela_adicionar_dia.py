@@ -579,9 +579,12 @@ class TelaAdicionarDia:
     def atualizar_valor_dia(self, event=None):
         try:
             total_sacos = int(self.entry_total_sacos.get())
-            valor_saco = self.dao.get_valor_saco_atual()
-            valor_total = total_sacos * valor_saco
-            self.lbl_valor_dia.config(text=f"💰 Valor do dia: R$ {valor_total:.2f}")
+            # Busca valor_saco da produção específica
+            producao = self.dao.get_producao(self.producao_id)
+            if producao:
+                valor_saco = producao['valor_saco']
+                valor_total = total_sacos * valor_saco
+                self.lbl_valor_dia.config(text=f"💰 Valor do dia: R$ {valor_total:.2f}")
         except Exception:
             self.lbl_valor_dia.config(text="")
 
@@ -600,7 +603,13 @@ class TelaAdicionarDia:
             return
 
         data_producao = self.date_producao.get_date().strftime('%Y-%m-%d')
-        valor_saco = self.dao.get_valor_saco_atual()
+        
+        # Busca valor_saco da produção específica
+        producao = self.dao.get_producao(self.producao_id)
+        if not producao:
+            messagebox.showerror("Erro", "Produção não encontrada!")
+            return
+        valor_saco = producao['valor_saco']
 
         divisoes_data = []
 

@@ -122,8 +122,6 @@ class TelaNovaProducao:
             fg=CORES['text_dark']
         ).pack(side="left", padx=(0, 10))
 
-        valor_atual = self.dao.get_valor_saco_atual()
-
         self.entry_valor_saco = tk.Entry(
             valor_frame,
             font=('Segoe UI', 11),
@@ -132,11 +130,11 @@ class TelaNovaProducao:
             width=15
         )
         self.entry_valor_saco.pack(side="left")
-        self.entry_valor_saco.insert(0, f"{valor_atual:.2f}")
+        self.entry_valor_saco.insert(0, "0.45")  # Default value
 
         tk.Label(
             valor_frame,
-            text=f"(Atual: R$ {valor_atual:.2f})",
+            text="(valor independente por produção)",
             font=('Segoe UI', 9),
             bg=CORES['bg_card'],
             fg=CORES['text_light']
@@ -228,15 +226,11 @@ class TelaNovaProducao:
         data_inicio = self.date_inicio.get_date().strftime('%Y-%m-%d')
         observacoes = self.text_obs.get("1.0", "end-1c").strip()
 
-        # Atualiza valor do saco se mudou
-        valor_atual = self.dao.get_valor_saco_atual()
-        if abs(valor_saco - valor_atual) > 0.001:
-            self.dao.atualizar_valor_saco(valor_saco)
-
-        # Cria produção
+        # Cria produção com valor_saco específico
         producao_id = self.dao.criar_producao(
             centro_custo_id=centro['id'],
             data_inicio=data_inicio,
+            valor_saco=valor_saco,  # ← valor específico desta produção
             observacoes=observacoes
         )
 
