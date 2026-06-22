@@ -25,22 +25,6 @@ def pasta_recibos_nf(empresa_id):
     os.makedirs(base, exist_ok=True)
     return base
 
-def verificar_versao_no_startup():
-    dao = UsuarioDAO()
-
-    versao_remota = dao.get_config("versao_atual")
-
-    if not versao_remota:
-        messagebox.showerror(
-            "Erro crítico",
-            "Versão do sistema não configurada no banco de dados.\n\n"
-            "O sistema não pode ser iniciado."
-        )
-        sys.exit()
-
-    return versao_remota
-
-
 def atualizacao_liberada(dao: UsuarioDAO):
     try:
         return dao.get_config("atualizacao_liberada") == "SIM"
@@ -55,17 +39,23 @@ def sistema_esta_desatualizado(dao):
 
 
 def executar_atualizacao(dao: UsuarioDAO):
-    caminho_exe = dao.get_config("exe_atualizacao")
-
-    if not caminho_exe or not os.path.exists(caminho_exe):
-        messagebox.showerror(
-            "Atualização indisponível",
-            "Arquivo de atualização não encontrado.\n\n"
-            "Entre em contato com o administrador."
-        )
-        return
+    from database.sessao import sessao
 
     try:
+        if sessao.exe_url_remoto:
+            messagebox.showinfo("Atualização", "Baixando a atualização, aguarde...")
+            from services.licenca_online_service import baixar_atualizacao
+            caminho_exe = baixar_atualizacao(sessao.exe_url_remoto)
+        else:
+            caminho_exe = dao.get_config("exe_atualizacao")
+            if not caminho_exe or not os.path.exists(caminho_exe):
+                messagebox.showerror(
+                    "Atualização indisponível",
+                    "Arquivo de atualização não encontrado.\n\n"
+                    "Entre em contato com o administrador."
+                )
+                return
+
         messagebox.showinfo(
             "Atualização",
             "O sistema será fechado para aplicar a atualização."
@@ -78,6 +68,11 @@ def executar_atualizacao(dao: UsuarioDAO):
         messagebox.showwarning(
             "Atualização cancelada",
             "A atualização foi cancelada pelo usuário."
+        )
+    except Exception as e:
+        messagebox.showerror(
+            "Erro na atualização",
+            f"Não foi possível baixar/executar a atualização:\n{e}"
         )
 
 

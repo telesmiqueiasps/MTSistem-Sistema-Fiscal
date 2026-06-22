@@ -18,13 +18,25 @@ class SistemaFiscal:
         self.empresa_id = sessao.empresa_id
         self.empresa_nome = sessao.empresa_nome
         self.dao = UsuarioDAO()
-        self.desatualizado = sistema_esta_desatualizado(self.dao)
-        self.atualizacao_liberada = atualizacao_liberada(self.dao)
         self.usuario_admin = self.dao.usuario_admin(self.usuario_id)
-        self.mensagem_update = self.dao.get_config(
-            "mensagem_update",
-            "⚠️ Sistema desatualizado"
-        )
+
+        if sessao.versao_remota:
+            # Verificação online (services.licenca_online_service) respondeu
+            # no startup — prioriza a versão/atualização publicadas no site.
+            self.desatualizado = str(sessao.versao_remota).strip() != str(VERSAO_ATUAL).strip()
+            self.atualizacao_liberada = bool(sessao.exe_url_remoto)
+            self.mensagem_update = sessao.mensagem_update_remoto or self.dao.get_config(
+                "mensagem_update", "⚠️ Sistema desatualizado"
+            )
+        else:
+            # Sem resposta do site (offline, fora do ar, etc.) — cai de volta
+            # na verificação local baseada no banco da empresa.
+            self.desatualizado = sistema_esta_desatualizado(self.dao)
+            self.atualizacao_liberada = atualizacao_liberada(self.dao)
+            self.mensagem_update = self.dao.get_config(
+                "mensagem_update",
+                "⚠️ Sistema desatualizado"
+            )
         root.title(f"MT Sistem - Sistema Fiscal - {self.empresa_nome}")
         
         # Janela maximizada
