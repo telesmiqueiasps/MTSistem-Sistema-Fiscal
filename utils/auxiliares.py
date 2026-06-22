@@ -17,6 +17,14 @@ def pasta_dados_app(nome_app="MTSistem"):
     os.makedirs(base, exist_ok=True)
     return base
 
+
+def pasta_recibos_nf(empresa_id):
+    """Pasta onde ficam os recibos de notas fiscais assinados, isolada por empresa."""
+    from database.conexao import DB_DIR
+    base = os.path.join(DB_DIR, "empresas", "recibos_nf", str(empresa_id))
+    os.makedirs(base, exist_ok=True)
+    return base
+
 def verificar_versao_no_startup():
     dao = UsuarioDAO()
 

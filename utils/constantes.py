@@ -14,6 +14,7 @@ MODULOS = {
     "abrir_diarias": "Emissor de Diárias",
     "abrir_servicos": "Emissor de Serviços",
     'abrir_producao': "Controle de Produção",
+    "abrir_notas_fiscais": "Notas Fiscais",
 }
 
 CORES = {

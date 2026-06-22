@@ -90,6 +90,11 @@ class SistemaFiscal:
         self.limpar_content_area()
         ProducoesPrincipalEmbed(self.content_area, self)
 
+    def abrir_notas_fiscais(self):
+        from telas.tela_notas_fiscais import NotasFiscaisEmbed
+        self.limpar_content_area()
+        NotasFiscaisEmbed(self.content_area, self)
+
     def voltar_home(self):
         self.limpar_content_area()
         self.mostrar_home()
@@ -242,6 +247,9 @@ class SistemaFiscal:
 
         if is_admin or "abrir_producao" in permissoes:
             self.criar_menu_item(menu_frame, "Controle de Produção", self.abrir_producao, icone="producao.png")
+
+        if is_admin or "abrir_notas_fiscais" in permissoes:
+            self.criar_menu_item(menu_frame, "Notas Fiscais", self.abrir_notas_fiscais, icone="notas_fiscal.png")
         # Separador antes da administração
         if is_admin:
 

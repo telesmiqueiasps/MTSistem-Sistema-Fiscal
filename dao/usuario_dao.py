@@ -156,6 +156,9 @@ class UsuarioDAO:
                 "abrir_diaristas",
                 "abrir_centros_custo",
                 "abrir_diarias",
+                "abrir_servicos",
+                "abrir_producao",
+                "abrir_notas_fiscais",
                 "usuarios_admin"
             ]
 
