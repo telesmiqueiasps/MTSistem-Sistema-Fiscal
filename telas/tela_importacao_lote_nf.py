@@ -81,7 +81,7 @@ class ImportacaoLoteNFDialog:
                       font=('Segoe UI', 9, 'bold'),
                       background=CORES['bg_card'], foreground=CORES['text_light']).pack(side="left")
 
-        canvas = tk.Canvas(list_card, bg=CORES['bg_dark'], highlightthickness=0)
+        canvas = tk.Canvas(list_card, bg=CORES['bg_card'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(list_card, orient="vertical", command=canvas.yview)
         self.lista_frame = ttk.Frame(canvas, style="Card.TFrame")
 

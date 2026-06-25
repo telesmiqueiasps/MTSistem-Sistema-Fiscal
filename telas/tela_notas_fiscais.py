@@ -199,12 +199,10 @@ class NotasFiscaisEmbed:
 
         ttk.Button(acoes, text="✏️ Editar", style="Secondary.TButton",
                    command=self.editar_nota_selecionada).pack(side="left", padx=(0, 6))
-        ttk.Button(acoes, text="🧾 Recibo / Pagamento", style="Add.TButton",
-                   command=self.abrir_recibo_selecionado).pack(side="left", padx=(0, 6))
         ttk.Button(acoes, text="🗑️ Excluir", style="Danger.TButton",
                    command=self.excluir_nota_selecionada).pack(side="left")
 
-        self.tree.bind("<Double-1>", lambda _e: self.editar_nota_selecionada())
+        self.tree.bind("<Double-1>", lambda _e: self.abrir_recibo_selecionado())
 
         self._carregar_notas()
 
