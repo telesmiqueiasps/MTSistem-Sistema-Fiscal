@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from dao.usuario_dao import UsuarioDAO
+from database.sessao import sessao
 from utils.constantes import CORES, MODULOS
 from utils.auxiliares import resource_path
 
@@ -50,7 +51,17 @@ class TelaUsuariosAdmin:
             background=CORES['bg_card']
         ).pack(anchor="w")
 
-        self.lista = tk.Listbox(left, width=30, height=25)
+        filtro_frame = ttk.Frame(left, style="Card.TFrame")
+        filtro_frame.pack(fill="x", pady=(6, 0))
+
+        self.filtro_var = tk.StringVar(value="todos")
+        for texto, valor in [("Todos", "todos"), ("Ativos", "ativos"), ("Inativos", "inativos")]:
+            ttk.Radiobutton(
+                filtro_frame, text=texto, variable=self.filtro_var, value=valor,
+                command=self.carregar_usuarios
+            ).pack(side="left", padx=(0, 6))
+
+        self.lista = tk.Listbox(left, width=30, height=23)
         self.lista.pack(pady=10)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_usuario)
 
@@ -61,12 +72,20 @@ class TelaUsuariosAdmin:
             command=self.novo_usuario
         ).pack(fill="x", pady=(5, 0))
 
+        self.btn_status = ttk.Button(
+            left,
+            text="🔒 Desativar Usuário",
+            style='Warning.TButton',
+            command=self.alternar_status
+        )
+        self.btn_status.pack(fill="x", pady=5)
+
         ttk.Button(
             left,
             text="🗑 Excluir Usuário",
             style='Danger.TButton',
             command=self.excluir_usuario
-        ).pack(fill="x", pady=5)
+        ).pack(fill="x")
 
         # ======================
         # LADO DIREITO – FORM
@@ -180,10 +199,19 @@ class TelaUsuariosAdmin:
     # ======================
     def carregar_usuarios(self):
         self.lista.delete(0, tk.END)
-        self.usuarios = self.dao.listar_usuarios()
-        for uid, nome, admin in self.usuarios:
-            sufixo = " (Admin)" if admin else ""
-            self.lista.insert(tk.END, f"{nome}{sufixo}")
+        todos = self.dao.listar_usuarios()
+        filtro = self.filtro_var.get()
+        if filtro == "ativos":
+            self.usuarios = [u for u in todos if u[3]]
+        elif filtro == "inativos":
+            self.usuarios = [u for u in todos if not u[3]]
+        else:
+            self.usuarios = todos
+
+        for uid, nome, admin, is_active in self.usuarios:
+            sufixo_admin = " (Admin)" if admin else ""
+            sufixo_status = "" if is_active else "  [Inativo]"
+            self.lista.insert(tk.END, f"{nome}{sufixo_admin}{sufixo_status}")
 
     def selecionar_usuario(self, event):
         idx = self.lista.curselection()
@@ -203,6 +231,14 @@ class TelaUsuariosAdmin:
         for modulo, var in self.vars_permissoes.items():
             var.set(1 if modulo in permissoes else 0)
 
+        self._atualizar_botao_status(dados[3])
+
+    def _atualizar_botao_status(self, is_active):
+        if is_active:
+            self.btn_status.configure(text="🔒 Desativar Usuário", style="Warning.TButton")
+        else:
+            self.btn_status.configure(text="✅ Ativar Usuário", style="Add.TButton")
+
     def novo_usuario(self):
         self.usuario_atual_id = None
         self.entry_nome.delete(0, tk.END)
@@ -210,6 +246,7 @@ class TelaUsuariosAdmin:
         self.var_admin.set(0)
         for var in self.vars_permissoes.values():
             var.set(0)
+        self._atualizar_botao_status(True)
     
     def salvar(self):
         nome = self.entry_nome.get().strip()
@@ -254,3 +291,35 @@ class TelaUsuariosAdmin:
             self.dao.excluir_usuario(self.usuario_atual_id)
             self.novo_usuario()
             self.carregar_usuarios()
+
+    def alternar_status(self):
+        if not self.usuario_atual_id:
+            messagebox.showwarning("Atenção", "Selecione um usuário na lista.")
+            return
+
+        dados = self.dao.buscar_usuario(self.usuario_atual_id)
+        nome, is_active = dados[1], dados[3]
+
+        if is_active:
+            if self.usuario_atual_id == sessao.usuario_id and not messagebox.askyesno(
+                "Atenção",
+                "Você está desativando o seu próprio usuário e perderá "
+                "acesso ao sistema no próximo login. Deseja continuar?"
+            ):
+                return
+            if not messagebox.askyesno(
+                "Confirmar desativação",
+                f"Desativar o usuário '{nome}'?\n\n"
+                "Ele não conseguirá mais fazer login até ser reativado."
+            ):
+                return
+            self.dao.desativar_usuario(self.usuario_atual_id)
+            messagebox.showinfo("Sucesso", "Usuário desativado.")
+        else:
+            if not messagebox.askyesno("Confirmar reativação", f"Reativar o usuário '{nome}'?"):
+                return
+            self.dao.ativar_usuario(self.usuario_atual_id)
+            messagebox.showinfo("Sucesso", "Usuário reativado.")
+
+        self.carregar_usuarios()
+        self._atualizar_botao_status(not is_active)

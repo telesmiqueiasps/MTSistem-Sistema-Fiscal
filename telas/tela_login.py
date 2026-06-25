@@ -85,8 +85,8 @@ class TelaLogin:
                  foreground='#495057',
                  bg='white').pack(anchor="w", pady=(0, 20))
 
-        # Lista de usuários
-        usuarios = self.dao.listar_usuarios()
+        # Lista de usuários (somente ativos — usuários desativados não aparecem para login)
+        usuarios = self.dao.listar_usuarios(apenas_ativos=True)
 
         if not usuarios:
             tk.Label(card_inner, text="Nenhum usuário cadastrado",
@@ -94,7 +94,7 @@ class TelaLogin:
                      foreground='#adb5bd',
                      bg='white').pack(pady=30)
         else:
-            for user_id, nome, admin in usuarios:
+            for user_id, nome, admin, _is_active in usuarios:
                 self._criar_item_usuario(card_inner, user_id, nome, admin)
 
         # ══════════════════════════════════════════════════════════════════════
@@ -232,6 +232,13 @@ class TelaLogin:
             if auth == "BLOQUEADO":
                 messagebox.showwarning("Bloqueado",
                                       "Acesso temporariamente bloqueado.\n"
+                                      "Contate o administrador.",
+                                      parent=self.root)
+                return
+
+            if auth == "INATIVO":
+                messagebox.showwarning("Usuário inativo",
+                                      "Este usuário foi desativado.\n"
                                       "Contate o administrador.",
                                       parent=self.root)
                 return

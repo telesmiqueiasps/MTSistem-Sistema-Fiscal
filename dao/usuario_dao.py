@@ -178,7 +178,7 @@ class UsuarioDAO:
 
         # 1️⃣ Valida usuário e senha
         cur.execute(
-            "SELECT id, admin FROM usuarios WHERE nome=? AND senha=?",
+            "SELECT id, admin, is_active FROM usuarios WHERE nome=? AND senha=?",
             (nome, self.hash_senha(senha))
         )
         usuario = cur.fetchone()
@@ -186,9 +186,13 @@ class UsuarioDAO:
         if not usuario:
             return None  # usuário ou senha inválidos
 
-        usuario_id, is_admin = usuario
+        usuario_id, is_admin, is_active = usuario
 
-        # 2️⃣ Verifica se o sistema está bloqueado
+        # 2️⃣ Usuário desativado → bloqueia acesso (mesmo se for admin)
+        if not is_active:
+            return "INATIVO"
+
+        # 3️⃣ Verifica se o sistema está bloqueado
         cur.execute(
             "SELECT valor FROM configuracoes WHERE chave='sistema_bloqueado'"
         )
@@ -196,11 +200,11 @@ class UsuarioDAO:
 
         sistema_bloqueado = row and row[0] == "SIM"
 
-        # 3️⃣ Se bloqueado e NÃO for admin → bloqueia acesso
+        # 4️⃣ Se bloqueado e NÃO for admin → bloqueia acesso
         if sistema_bloqueado and not is_admin:
             return "BLOQUEADO"
 
-        # 4️⃣ Login permitido
+        # 5️⃣ Login permitido
         return usuario_id, is_admin
 
 
@@ -225,9 +229,13 @@ class UsuarioDAO:
 
 
 
-    def listar_usuarios(self):
+    def listar_usuarios(self, apenas_ativos=False):
         cur = self.conn.cursor()
-        cur.execute("SELECT id, nome, admin FROM usuarios")
+        sql = "SELECT id, nome, admin, is_active FROM usuarios"
+        if apenas_ativos:
+            sql += " WHERE is_active = 1"
+        sql += " ORDER BY nome COLLATE NOCASE"
+        cur.execute(sql)
         return cur.fetchall()
 
     def permissoes_usuario(self, usuario_id):
@@ -272,10 +280,20 @@ class UsuarioDAO:
     def buscar_usuario(self, usuario_id):
         cur = self.conn.cursor()
         cur.execute(
-            "SELECT id, nome, admin FROM usuarios WHERE id=?",
+            "SELECT id, nome, admin, is_active FROM usuarios WHERE id=?",
             (usuario_id,)
         )
         return cur.fetchone()
+
+    def ativar_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute("UPDATE usuarios SET is_active=1 WHERE id=?", (usuario_id,))
+        self.conn.commit()
+
+    def desativar_usuario(self, usuario_id):
+        cur = self.conn.cursor()
+        cur.execute("UPDATE usuarios SET is_active=0 WHERE id=?", (usuario_id,))
+        self.conn.commit()
 
 
     def atualizar_usuario(self, usuario_id, nome, admin):
