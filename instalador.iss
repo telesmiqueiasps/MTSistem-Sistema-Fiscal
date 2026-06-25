@@ -1,6 +1,6 @@
 [Setup]
 AppName=MTSistem
-AppVersion=1.1.0
+AppVersion=1.2.0
 DefaultDirName={pf}\MTSistem
 DefaultGroupName=MTSistem
 OutputDir=installer
