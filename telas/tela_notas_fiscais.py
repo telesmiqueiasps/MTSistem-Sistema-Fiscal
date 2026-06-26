@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk, messagebox
@@ -18,6 +21,18 @@ def _fmt_brl(valor):
     if valor is None:
         return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _abrir_arquivo(path):
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", path])
+        else:
+            subprocess.run(["xdg-open", path])
+    except Exception as e:
+        messagebox.showerror("Erro", f"Não foi possível abrir o arquivo:\n{e}")
 
 
 def _fmt_data_br(iso):
@@ -88,6 +103,8 @@ class NotasFiscaisEmbed:
                    command=self.nova_nota).pack(side="left", padx=5)
         ttk.Button(right_header, text="📥 Importar em Lote (XML)", style="Secondary.TButton",
                    command=self.abrir_importacao_lote).pack(side="left", padx=5)
+        ttk.Button(right_header, text="📊 Relatório", style="Add.TButton",
+                   command=self.abrir_relatorio).pack(side="left", padx=5)
 
         # ── SUB-NAVEGAÇÃO ────────────────────────────────────────────────────
         nav_frame = ttk.Frame(main_frame, style='Main.TFrame')
@@ -245,7 +262,7 @@ class NotasFiscaisEmbed:
             ("emissao", "Emissão", 100, "w"),
             ("valor", "Valor", 110, "e"),
             ("status", "Status", 110, "center"),
-            ("recibos", "Recibos", 80, "center"),
+            ("recibos", "👁 Recibos", 80, "center"),
         ]
         for key, label, width, anchor in cols:
             self.tree.heading(key, text=label, anchor="w" if anchor == "w" else anchor)
@@ -255,6 +272,7 @@ class NotasFiscaisEmbed:
         self.tree.tag_configure("ok", foreground=CORES['primary'])
         self.tree.tag_configure("pendente", foreground=CORES['warning'])
 
+        self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.pack(fill="both", expand=True)
 
     def _parse_date_filtro(self, s):
@@ -304,8 +322,29 @@ class NotasFiscaisEmbed:
             self.tree.insert("", "end", iid=str(nota["id"]), tags=(status_key,), values=(
                 nota["numero"], nota["emitente"], nota["competencia"],
                 _fmt_data_br(nota["data_emissao"]), _fmt_brl(nota["valor"]),
-                status_txt, qtd or "—"
+                status_txt, f"👁 {qtd}" if qtd else "—"
             ))
+
+    def _on_tree_click(self, event):
+        """Clique na coluna 'Recibos' abre direto o último recibo anexado,
+        sem precisar passar pelo diálogo de Recibo/Pagamento."""
+        if self.tree.identify_region(event.x, event.y) != "cell":
+            return
+        if self.tree.identify_column(event.x) != "#7":
+            return
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+
+        recibos = self.dao.listar_recibos(int(row_id))
+        if not recibos:
+            return
+        arquivo = recibos[0]["arquivo"]
+        if os.path.exists(arquivo):
+            _abrir_arquivo(arquivo)
+        else:
+            messagebox.showwarning("Arquivo não encontrado",
+                                   "O arquivo do recibo não foi encontrado no disco.")
 
     def _update_stats(self, emitente_id=None, busca=None, data_ini=None, data_fim=None):
         for w in self.stats_frame.winfo_children():
@@ -404,6 +443,10 @@ class NotasFiscaisEmbed:
 
     def abrir_importacao_lote(self):
         ImportacaoLoteNFDialog(self.parent_frame, self.dao, on_concluido=self._on_nota_salva)
+
+    def abrir_relatorio(self):
+        from telas.tela_relatorio_notas_fiscais import TelaRelatorioNotasFiscais
+        TelaRelatorioNotasFiscais(self.parent_frame)
 
     def _on_nota_salva(self):
         self.dao.importar_emitentes_das_notas()
